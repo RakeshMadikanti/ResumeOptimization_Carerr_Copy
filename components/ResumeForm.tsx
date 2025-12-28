@@ -126,40 +126,36 @@ export function ResumeForm() {
 
             if (!response.ok) throw new Error('Optimization failed');
 
-            // The API now returns JSON with file as base64
-            const data = await response.json();
-
-            // Decode Base64 to Blob
-            const byteCharacters = atob(data.file);
-            const byteNumbers = new Array(byteCharacters.length);
-            for (let i = 0; i < byteCharacters.length; i++) {
-                byteNumbers[i] = byteCharacters.charCodeAt(i);
-            }
-            const byteArray = new Uint8Array(byteNumbers);
-            const blob = new Blob([byteArray], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
-
-            // Create Download Link
+            // 1. Handle File Download (Standard Blob)
+            const blob = await response.blob();
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = data.filename;
+            a.download = `optimized_${file.name}`; // Fallback name
             document.body.appendChild(a);
             a.click();
             window.URL.revokeObjectURL(url);
 
-            // Show Verification Feedback
-            if (data.verification) {
-                const { score, is_optimized, feedback } = data.verification;
-                // Simple alert for now, or we can use a toast/state
-                alert(`Analysis Score: ${score}/100\n\n${feedback}`);
+            // 2. Handle Verification (From Headers)
+            const score = response.headers.get("X-Analysis-Score");
+            const feedbackBase64 = response.headers.get("X-Analysis-Feedback");
+
+            if (score && feedbackBase64) {
+                try {
+                    const feedback = atob(feedbackBase64); // Decode safe Base64 header
+                    alert(`Analysis Score: ${score}/100\n\n${feedback}`);
+                } catch (e) {
+                    console.error("Failed to decode feedback header", e);
+                }
             }
-            setStatus("completed"); // Set status to completed on success
+
+            setStatus("completed");
         } catch (error) {
             console.error(error);
-            setStatus("error"); // Set status to error on failure
+            setStatus("error");
             alert('Error optimizing resume');
         } finally {
-            // setLoading(false); // Removed as setLoading is not defined
+            // setLoading(false); 
         }
     };
 

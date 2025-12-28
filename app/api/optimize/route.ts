@@ -73,18 +73,20 @@ export async function POST(req: NextRequest) {
         await unlink(jdPath);
         await unlink(promptPath);
 
-        // Return the file AND the verification data
-        // Since we need to return a file download, we can't easily return JSON body too without multipart.
-        // Strategy: Return JSON with Base64 file? Or rely on Headers?
-        // Let's use Base64 JSON response for simplicity in this architecture.
+        // Return the file as a standardized Blob (Prevent Corruption)
+        // Pass Verification Data via Custom Headers
 
-        const fileBase64 = fileBuffer.toString('base64');
+        const verification = result.verification || {};
+        const safeFeedback = (verification.feedback || "").replace(/[\r\n]+/g, " "); // Sanitize headers
 
-        return NextResponse.json({
-            file: fileBase64,
-            filename: `optimized_${file.name}`,
-            changes: result.changes,
-            verification: result.verification // Pass this to frontend
+        return new NextResponse(fileBuffer, {
+            headers: {
+                "Content-Type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                "Content-Disposition": `attachment; filename="optimized_${file.name}"`,
+                "X-Analysis-Score": String(verification.score || 0),
+                "X-Analysis-Optimized": String(verification.is_optimized || false),
+                "X-Analysis-Feedback": Buffer.from(safeFeedback).toString('base64') // Base64 encode for safe header transport
+            },
         });
 
     } catch (error: any) {
