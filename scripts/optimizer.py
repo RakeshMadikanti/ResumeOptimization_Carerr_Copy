@@ -63,7 +63,7 @@ def optimize_resume(input_path, output_path, jd_text, prompt_instruction, provid
            - **Transferrable Skills Protocol**: If the JD domain is different (e.g., Data Engineer -> Java), and you run out of direct technical matches, you **MUST** fill the remaining space with *transferrable skills* (e.g., "Agile Development", "Cross-functional Leadership", "System Optimization", "Requirement Analysis").
            - **CRITICAL**: Do not leave empty space. Imagine you are filling a physical box on the page. It must be full.
         2. **Work Experience**: Review **ALL** job entries provided. Do not stop after the first one.
-        3. **1-to-1 Replacement**: You cannot add new bullet points or delete existing ones. simply *rewrite* the existing text.
+        3. **Aggressive Replacement**: If the JD domain is different (e.g. Data -> Cloud), you are AUTHORIZED to replace a bullet point entirely with a new, relevant one, as long as it occupies the same 'slot'. Do not be constrained by the original content if it is irrelevant.
         4. **Quantity**: Rewrite **EVERY** single bullet point that can be improved to match the JD. Do not be lazy. Process the entire resume content.
         5. **Precision**: The "original" field in your output must match the provided resume text EXACTLY (substring match is fine).
         6. **Adaptability**: Adapt the experience to the JD's domain. If the candidate lacks specific domain experience, **HALLUCINATE** relevant side-projects or analogous experience that bridges the gap, ensuring the tone remains professional and truthful to the *level* of seniority.
