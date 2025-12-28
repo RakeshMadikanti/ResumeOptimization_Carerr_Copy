@@ -55,44 +55,35 @@ def optimize_resume(input_path, output_path, jd_text, prompt_instruction, provid
         resume_content = "\n".join(full_text)
         
         system_prompt = f"""
-        You are an expert resume optimizer. 
-        Goal: {prompt_instruction}
+        You are a resume rewriter. Your job is simple:
         
-        Input Data:
-        1. **Job Description (JD)**: The target role requirements.
-        2. **Resume Content**: The candidate's current experience.
+        **Goal**: {prompt_instruction}
         
-        Your Mission:
-        Rewrite the resume content to strictly align with the specific keywords, skills, and tone of the provided JD. 
-        You must update **BOTH** the "Professional Summary" and the "Experience" bullet points.
+        **CRITICAL INSTRUCTIONS**:
+        1. You will receive a Resume and a Job Description (JD).
+        2. You MUST rewrite the **Professional Summary** to match the JD. Keep the SAME length (same number of sentences).
+        3. You MUST rewrite **EVERY SINGLE Experience bullet point** to match the JD. Do NOT skip any.
+        4. For EACH paragraph/bullet in the resume, you MUST provide a replacement. No exceptions.
+        5. The "original" field must be an EXACT copy-paste of the text from the resume I provide.
+        6. The "new" field must be your rewritten version that aligns with the JD.
+        7. If the domain is different (e.g., Java resume for a Data Engineering JD), you MUST completely rewrite the bullet point to be relevant. Do not try to "bridge" - just REPLACE.
         
-        Execution Rules:
-        Execution Rules:
-        1. **Professional Summary**: Rewrite it to align with the JD, but **YOU MUST PRESERVE THE VISUAL DENSITY**. 
-           - **Requirement**: Count the sentences in the original summary (e.g., 5 sentences). The new summary MUST have the equal number of sentences (e.g., 5 sentences).
-           - **Transferrable Skills Protocol**: If the JD domain is different (e.g., Data Engineer -> Java), and you run out of direct technical matches, you **MUST** fill the remaining space with *transferrable skills* (e.g., "Agile Development", "Cross-functional Leadership", "System Optimization", "Requirement Analysis").
-           - **CRITICAL**: Do not leave empty space. Imagine you are filling a physical box on the page. It must be full.
-        2. **Work Experience**: Review **ALL** job entries provided. Do not stop after the first one.
-        3. **Aggressive Replacement**: If the JD domain is different (e.g. Data -> Cloud), you are AUTHORIZED to replace a bullet point entirely with a new, relevant one, as long as it occupies the same 'slot'. Do not be constrained by the original content if it is irrelevant.
-        4. **Quantity**: Rewrite **EVERY** single bullet point that can be improved to match the JD. Do not be lazy. Process the entire resume content.
-        5. **Precision**: The "original" field in your output must match the provided resume text EXACTLY (substring match is fine).
-        6. **Adaptability**: Adapt the experience to the JD's domain. If the candidate lacks specific domain experience, **HALLUCINATE** relevant side-projects or analogous experience that bridges the gap, ensuring the tone remains professional and truthful to the *level* of seniority.
-        
-        Output Format:
-        Return ONLY a raw JSON object with this structure:
+        **Output Format**:
+        Return ONLY a raw JSON object:
         {{
             "verification_report": {{
-                "score": 0-100, // How well does the NEW content match the JD?
-                "is_optimized": true/false, // Did you successfully integrate the top 5 keywords?
-                "feedback": "Brief 1-sentence explanation of what was improved or what is still missing."
+                "score": 0-100,
+                "is_optimized": true/false,
+                "feedback": "Brief 1-sentence summary."
             }},
             "replacements": [
-                {{
-                    "original": "exact text from the resume",
-                    "new": "optimized version using JD keywords"
-                }}
+                {{"original": "exact text from resume", "new": "rewritten text for JD"}}
             ]
         }}
+        
+        **FAILURE CONDITIONS**:
+        - If you return fewer replacements than the number of paragraphs in the resume, you have FAILED.
+        - If any bullet point is left unchanged, you have FAILED.
         """
         
         user_prompt = f"""
@@ -204,8 +195,8 @@ def optimize_resume(input_path, output_path, jd_text, prompt_instruction, provid
                     best_ratio = ratio
                     best_match_para = para
 
-            # Threshold for replacement (0.60 allows for AI hallucinations in 'original' text citation)
-            if best_match_para and best_ratio > 0.60:
+            # Threshold for replacement (0.40 allows for significant AI rewrites of 'original')
+            if best_match_para and best_ratio > 0.40:
                 # We found the target paragraph!
                 
                 # 1. Capture Style from the first run (usually representative)
