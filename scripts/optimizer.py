@@ -115,18 +115,35 @@ def optimize_resume(input_path, output_path, jd_text, prompt_instruction, provid
             return SequenceMatcher(None, a, b).ratio()
 
         def copy_style(source_run, target_run):
-            """Copy font name, size, bold, italic, color, underline from source to target."""
+            """Copy ALL font attributes from source to target for exact visual match."""
             try:
+                # Basic Formatting
                 target_run.bold = source_run.bold
                 target_run.italic = source_run.italic
                 target_run.underline = source_run.underline
                 
+                # Advanced Formatting
+                if source_run.font.strike is not None:
+                    target_run.font.strike = source_run.font.strike
+                if source_run.font.double_strike is not None:
+                    target_run.font.double_strike = source_run.font.double_strike
+                if source_run.font.subscript is not None:
+                    target_run.font.subscript = source_run.font.subscript
+                if source_run.font.superscript is not None:
+                    target_run.font.superscript = source_run.font.superscript
+                if source_run.font.small_caps is not None:
+                    target_run.font.small_caps = source_run.font.small_caps
+                if source_run.font.all_caps is not None:
+                    target_run.font.all_caps = source_run.font.all_caps
+                
+                # Font Face and Size
                 if source_run.font.name:
                     target_run.font.name = source_run.font.name
                 
                 if source_run.font.size:
                     target_run.font.size = source_run.font.size
                     
+                # Color
                 if source_run.font.color and source_run.font.color.rgb:
                     target_run.font.color.rgb = source_run.font.color.rgb
             except Exception:
