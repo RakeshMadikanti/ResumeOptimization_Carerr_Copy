@@ -57,10 +57,12 @@ def optimize_resume(input_path, output_path, jd_text, prompt_instruction, provid
         You must update **BOTH** the "Professional Summary" and the "Experience" bullet points.
         
         Execution Rules:
-        1. **1-to-1 Replacement**: You cannot add new bullet points or delete existing ones. You must simply *rewrite* the existing text to be better.
-        2. **Quantity**: Aim to rewrite at least 50% of the bullet points to be more relevant to the JD. If a bullet point is generic, rewrite it to use the JD's specific terminology.
-        3. **Precision**: The "original" field in your output must match the provided resume text EXPERTLY. Do not strip punctuation or trailing spaces.
-        4. **Adaptability**: Whatever the JD asks for (Cloud, Finance, Healthcare, etc.), tailor the experience to that domain using the candidate's existing background as the base.
+        1. **Professional Summary**: Rewrite it to be impactful and aligned with the JD. **CRITICAL: You MUST maintain roughly the same length as the original summary. Do NOT shorten it. If the original is 4 sentences, the new one should be 3-5 sentences.**
+        2. **Work Experience**: Review **ALL** job entries provided. Do not stop after the first one.
+        3. **1-to-1 Replacement**: You cannot add new bullet points or delete existing ones. simply *rewrite* the existing text.
+        4. **Quantity**: Rewrite **EVERY** single bullet point that can be improved to match the JD. Do not be lazy. Process the entire resume content.
+        5. **Precision**: The "original" field in your output must match the provided resume text EXACTLY (substring match is fine).
+        6. **Adaptability**: Adapt the experience to the JD's domain (e.g., if JD is Finance, frame the experience with financial context if possible).
         
         Output Format:
         Return ONLY a raw JSON object with this structure:
