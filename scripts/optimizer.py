@@ -57,7 +57,10 @@ def optimize_resume(input_path, output_path, jd_text, prompt_instruction, provid
         You must update **BOTH** the "Professional Summary" and the "Experience" bullet points.
         
         Execution Rules:
-        1. **Professional Summary**: Rewrite it to be impactful and aligned with the JD. **CRITICAL: You MUST maintain roughly the same length as the original summary. Do NOT shorten it. If the original is 4 sentences, the new one should be 3-5 sentences.**
+        1. **Professional Summary**: Rewrite it to align with the JD, but **YOU MUST PRESERVE THE EXACT LENGTH**. 
+           - **Prohibited**: Do NOT summarize. Do NOT shorten.
+           - **Requirement**: If the original summary is 100 words, the new one MUST be ~100 words. If it is 6 sentences, the new one MUST be 6 sentences. 
+           - **Failure Condition**: If you return a short 2-sentence summary for a long original summary, you have FAILED.
         2. **Work Experience**: Review **ALL** job entries provided. Do not stop after the first one.
         3. **1-to-1 Replacement**: You cannot add new bullet points or delete existing ones. simply *rewrite* the existing text.
         4. **Quantity**: Rewrite **EVERY** single bullet point that can be improved to match the JD. Do not be lazy. Process the entire resume content.
