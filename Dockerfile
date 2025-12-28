@@ -32,6 +32,11 @@ COPY . .
 # 4. Build Next.js Application
 # Disable telemetry during build
 ENV NEXT_TELEMETRY_DISABLED=1
+
+# Accept the Clerk Publishable Key as a build argument
+ARG NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
+ENV NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=$NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
+
 RUN npm run build
 
 # 5. Production Setup
