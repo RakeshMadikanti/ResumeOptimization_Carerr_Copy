@@ -109,36 +109,86 @@ def optimize_resume(input_path, output_path, jd_text, prompt_instruction, provid
         
         # Replace in document
         changes_count = 0
+        from difflib import SequenceMatcher
+
+        def similar(a, b):
+            return SequenceMatcher(None, a, b).ratio()
+
+        def copy_style(source_run, target_run):
+            """Copy font name, size, bold, italic, color, underline from source to target."""
+            try:
+                target_run.bold = source_run.bold
+                target_run.italic = source_run.italic
+                target_run.underline = source_run.underline
+                
+                if source_run.font.name:
+                    target_run.font.name = source_run.font.name
+                
+                if source_run.font.size:
+                    target_run.font.size = source_run.font.size
+                    
+                if source_run.font.color and source_run.font.color.rgb:
+                    target_run.font.color.rgb = source_run.font.color.rgb
+            except Exception:
+                pass
+
         for replacement in replacements:
             original = replacement["original"]
             new_text = replacement["new"]
             
-            # Robust search and replace
-            # We ignore leading/trailing whitespace for matching, but replace the whole paragraph text
+            # Robust search with Fuzzy Matching
+            # Normalize whitespace for comparison
             norm_original = " ".join(original.split())
             
+            best_match_para = None
+            best_ratio = 0.0
+
+            # First pass: Look for the best paragraph match
             for para in doc.paragraphs:
-                # Normalize paragraph text for comparison
                 norm_para = " ".join(para.text.split())
                 
-                # Check for exact match or substring match
-                if norm_original in norm_para and len(norm_original) > 10:
-                    # We found the paragraph.
-                    # To preserve runs, we ideally would replace runs, but docx structure is complex.
-                    # Text assignment to para.text preserves paragraph style (bullets) but resets character formatting (bolding within line).
-                    # Given the user wants to keep "format", para.text assignment keeps the BLOCK level formatting (bullets, indent).
-                    # It might lose "bold" words inside the sentence. 
-                    # For MVP, para.text = new_text is the safest way to change content without corrupting XML.
-                    
-                    # If it's a perfect match of the whole paragraph
-                    if norm_original == norm_para:
-                        para.text = new_text
-                        changes_count += 1
-                    # If it's a substring (e.g. one sentence in a multi-sentence bullet?)
-                    # The prompt asks for "sentences or bullet points".
-                    else:
-                        para.text = para.text.replace(original, new_text)
-                        changes_count += 1
+                # Skip empty or too short paragraphs
+                if len(norm_para) < 10:
+                    continue
+
+                # Check whole paragraph similarity
+                ratio = similar(norm_original, norm_para)
+                
+                # Check if it's a substring (e.g. one bullet point in a list but docx treats as para)
+                # If the original text is a significant part of the paragraph
+                if  norm_original in norm_para:
+                     ratio = 1.0 # Perfect substring match
+                
+                if ratio > best_ratio:
+                    best_ratio = ratio
+                    best_match_para = para
+
+            # Threshold for replacement (0.85 allows for minor AI hallucinations or smart-quote diffs)
+            if best_match_para and best_ratio > 0.85:
+                # We found the target paragraph!
+                
+                # 1. Capture Style from the first run (usually representative)
+                captured_run = None
+                if best_match_para.runs:
+                    captured_run = best_match_para.runs[0]
+                
+                # 2. Replace the text
+                # Note: Simply setting .text clears all runs and resets formatting to style default.
+                # We must manually clear runs to keep paragraph-level formatting (bullets, indent)
+                # then add a new run with the cloned style.
+                
+                best_match_para.clear() # Removes content but keeps paragraph style (e.g. List Bullet)
+                new_run = best_match_para.add_run(new_text)
+                
+                # 3. Apply Style
+                if captured_run:
+                    copy_style(captured_run, new_run)
+                
+                changes_count += 1
+                # print(f"Output: Replaced (confidence {best_ratio:.2f})")
+            else:
+                pass
+                # print(f"Warning: Could not find match for: {original[:30]}...")
 
         doc.save(output_path)
         print(json.dumps({"status": "success", "changes": changes_count}))
