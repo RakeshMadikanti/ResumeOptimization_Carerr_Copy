@@ -71,6 +71,11 @@ def optimize_resume(input_path, output_path, jd_text, prompt_instruction, provid
         Output Format:
         Return ONLY a raw JSON object with this structure:
         {{
+            "verification_report": {{
+                "score": 0-100, // How well does the NEW content match the JD?
+                "is_optimized": true/false, // Did you successfully integrate the top 5 keywords?
+                "feedback": "Brief 1-sentence explanation of what was improved or what is still missing."
+            }},
             "replacements": [
                 {{
                     "original": "exact text from the resume",
@@ -86,6 +91,9 @@ def optimize_resume(input_path, output_path, jd_text, prompt_instruction, provid
         
         Resume Content:
         {resume_content}
+        
+        **Self-Correction Task**: Before returning, evaluate your own rewrites. 
+        If you failed to include critical Keywords from the JD (e.g. "Java" or "AWS" was missing in the output), mark 'is_optimized' as false.
         """
 
         # Select Provider
@@ -213,8 +221,17 @@ def optimize_resume(input_path, output_path, jd_text, prompt_instruction, provid
                 pass
                 # print(f"Warning: Could not find match for: {original[:30]}...")
 
+        if replacements:
+            best_match_para = None # Reset
+            
+        verification = data.get("verification_report", {"score": 0, "is_optimized": False, "feedback": "No verification data provided."})
+        
         doc.save(output_path)
-        print(json.dumps({"status": "success", "changes": changes_count}))
+        print(json.dumps({
+            "status": "success", 
+            "changes": changes_count,
+            "verification": verification
+        }))
 
     except Exception as e:
         print(json.dumps({"status": "error", "message": str(e)}))

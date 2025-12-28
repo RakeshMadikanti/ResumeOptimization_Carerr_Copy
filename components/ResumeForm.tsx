@@ -119,21 +119,47 @@ export function ResumeForm() {
 
         try {
             setStatus("processing");
-            const res = await fetch("/api/optimize", {
+            const response = await fetch("/api/optimize", { // Changed 'res' to 'response'
                 method: "POST",
                 body: formData,
             });
 
-            if (!res.ok) throw new Error("Optimization failed");
+            if (!response.ok) throw new Error('Optimization failed');
 
-            // Handle file blob response
-            const blob = await res.blob();
+            // The API now returns JSON with file as base64
+            const data = await response.json();
+
+            // Decode Base64 to Blob
+            const byteCharacters = atob(data.file);
+            const byteNumbers = new Array(byteCharacters.length);
+            for (let i = 0; i < byteCharacters.length; i++) {
+                byteNumbers[i] = byteCharacters.charCodeAt(i);
+            }
+            const byteArray = new Uint8Array(byteNumbers);
+            const blob = new Blob([byteArray], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+
+            // Create Download Link
             const url = window.URL.createObjectURL(blob);
-            setDownloadUrl(url);
-            setStatus("completed");
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = data.filename;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+
+            // Show Verification Feedback
+            if (data.verification) {
+                const { score, is_optimized, feedback } = data.verification;
+                // Simple alert for now, or we can use a toast/state
+                alert(`Analysis Score: ${score}/100\n\n${feedback}`);
+            }
+            setStatus("completed"); // Set status to completed on success
         } catch (error) {
             console.error(error);
-            setStatus("error");
+            setStatus("error"); // Set status to error on failure
+            alert('Error optimizing resume');
+        } finally {
+            // setLoading(false); // Removed as setLoading is not defined
         }
     };
 
