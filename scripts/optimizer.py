@@ -36,9 +36,19 @@ def optimize_resume(input_path, output_path, jd_text, prompt_instruction, provid
     try:
         doc = Document(input_path)
         
+        # Helper to iterate ALL paragraphs (Body + Tables)
+        def iter_all_paragraphs(document):
+            for para in document.paragraphs:
+                yield para
+            for table in document.tables:
+                for row in table.rows:
+                    for cell in row.cells:
+                        for para in cell.paragraphs:
+                            yield para
+
         # specific extraction to keep context
         full_text = []
-        for para in doc.paragraphs:
+        for para in iter_all_paragraphs(doc):
             if para.text.strip():
                 full_text.append(para.text.strip())
         
@@ -175,7 +185,7 @@ def optimize_resume(input_path, output_path, jd_text, prompt_instruction, provid
             best_ratio = 0.0
 
             # First pass: Look for the best paragraph match
-            for para in doc.paragraphs:
+            for para in iter_all_paragraphs(doc):
                 norm_para = " ".join(para.text.split())
                 
                 # Skip empty or too short paragraphs
