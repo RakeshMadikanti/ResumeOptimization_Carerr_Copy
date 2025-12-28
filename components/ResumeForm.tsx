@@ -1,40 +1,107 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Upload, FileText, Sparkles, Download, Loader2 } from "lucide-react";
+import { Upload, FileText, Sparkles, Download, Loader2, Trash2, Clock, Pencil, Save } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { saveResumeToDB, getResumesFromDB, deleteResumeFromDB, SavedResume } from "@/lib/db";
+import { useAuth } from "@clerk/nextjs";
+
+interface SavedPrompt {
+    name: string;
+    content: string;
+}
 
 export function ResumeForm() {
+    const { userId, isLoaded } = useAuth();
+
     const [file, setFile] = useState<File | null>(null);
     const [jd, setJd] = useState("");
     const [prompt, setPrompt] = useState("");
-    const [savedPrompts, setSavedPrompts] = useState<string[]>([]);
+    const [savedPrompts, setSavedPrompts] = useState<SavedPrompt[]>([]);
+
+    // Resume Caching State
+    const [savedResumes, setSavedResumes] = useState<SavedResume[]>([]);
+
+    // Prompt Saving UI State
+    const [isSavingPrompt, setIsSavingPrompt] = useState(false);
+    const [newPromptName, setNewPromptName] = useState("");
+
     const [provider, setProvider] = useState<"gemini" | "openai">("openai");
     const [model, setModel] = useState("gpt-4o");
     const [status, setStatus] = useState<"idle" | "uploading" | "processing" | "completed" | "error">("idle");
     const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
 
-    // Load saved prompts on mount
+    // Load saved prompts & resumes on mount
     useEffect(() => {
-        const saved = localStorage.getItem("savedPrompts");
+        if (!isLoaded || !userId) return;
+
+        // Load Prompts (User Specific)
+        const saved = localStorage.getItem(`savedPrompts_${userId}`);
         if (saved) {
             setSavedPrompts(JSON.parse(saved));
+        } else {
+            setSavedPrompts([]); // Reset if switching users
         }
-    }, []);
 
-    const savePrompt = () => {
-        if (!prompt.trim()) return;
-        if (savedPrompts.includes(prompt.trim())) return;
-        const newPrompts = [...savedPrompts, prompt.trim()];
-        setSavedPrompts(newPrompts);
-        localStorage.setItem("savedPrompts", JSON.stringify(newPrompts));
+        // Load Resumes from DB (User Specific)
+        loadResumes(userId);
+    }, [isLoaded, userId]);
+
+    const loadResumes = async (uid: string) => {
+        try {
+            const list = await getResumesFromDB(uid);
+            setSavedResumes(list);
+        } catch (e) {
+            console.error("Failed to load resumes", e);
+        }
     };
 
-    const deletePrompt = (promptToDelete: string, e: React.MouseEvent) => {
+    const handleFileChange = async (newFile: File | null) => {
+        setFile(newFile);
+        if (newFile && userId) {
+            try {
+                await saveResumeToDB(newFile, userId);
+                loadResumes(userId);
+            } catch (e) {
+                console.error("Failed to save resume", e);
+            }
+        }
+    };
+
+    const selectResume = (r: SavedResume) => {
+        setFile(r.file);
+    };
+
+    const deleteResume = async (id: string, e: React.MouseEvent) => {
         e.stopPropagation();
-        const newPrompts = savedPrompts.filter(p => p !== promptToDelete);
+        if (!userId) return;
+        await deleteResumeFromDB(id);
+        loadResumes(userId);
+        if (file && savedResumes.find(r => r.id === id)?.file.name === file.name) {
+            setFile(null);
+        }
+    };
+
+    const savePrompt = () => {
+        if (!prompt.trim() || !newPromptName.trim() || !userId) return;
+
+        const newEntry: SavedPrompt = { name: newPromptName.trim(), content: prompt.trim() };
+        const newPrompts = [...savedPrompts, newEntry];
+
         setSavedPrompts(newPrompts);
-        localStorage.setItem("savedPrompts", JSON.stringify(newPrompts));
+        localStorage.setItem(`savedPrompts_${userId}`, JSON.stringify(newPrompts));
+
+        // Reset UI
+        setIsSavingPrompt(false);
+        setNewPromptName("");
+    };
+
+    const deletePrompt = (idx: number, e: React.MouseEvent) => {
+        e.stopPropagation();
+        if (!userId) return;
+        const newPrompts = savedPrompts.filter((_, i) => i !== idx);
+        setSavedPrompts(newPrompts);
+        localStorage.setItem(`savedPrompts_${userId}`, JSON.stringify(newPrompts));
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -75,19 +142,19 @@ export function ResumeForm() {
             <div className="p-8 space-y-6">
 
                 {/* File Upload */}
-                <div className="space-y-2">
+                <div className="space-y-4">
                     <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
                         Upload Original Resume (DOCX)
                     </label>
                     <div className={cn(
-                        "border-2 border-dashed border-muted-foreground/25 rounded-lg p-12 text-center hover:bg-muted/50 transition cursor-pointer relative",
+                        "border-2 border-dashed border-muted-foreground/25 rounded-lg p-8 text-center hover:bg-muted/50 transition cursor-pointer relative",
                         file && "border-primary/50 bg-primary/5"
                     )}>
                         <input
                             type="file"
                             accept=".docx"
                             className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                            onChange={(e) => setFile(e.target.files?.[0] || null)}
+                            onChange={(e) => handleFileChange(e.target.files?.[0] || null)}
                         />
                         <div className="flex flex-col items-center gap-2">
                             {file ? (
@@ -105,6 +172,34 @@ export function ResumeForm() {
                             )}
                         </div>
                     </div>
+
+                    {/* Recent Resumes List */}
+                    {savedResumes.length > 0 && (
+                        <div className="space-y-2">
+                            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Recent Resumes</p>
+                            <div className="flex flex-wrap gap-2">
+                                {savedResumes.slice(0, 3).map((r) => (
+                                    <div
+                                        key={r.id}
+                                        onClick={() => selectResume(r)}
+                                        className={cn(
+                                            "flex items-center gap-2 px-3 py-2 rounded-md border text-sm cursor-pointer transition-all hover:bg-accent group",
+                                            file?.name === r.name ? "bg-accent border-primary/50" : "bg-background border-border"
+                                        )}
+                                    >
+                                        <FileText className="w-3 h-3 text-muted-foreground" />
+                                        <span className="truncate max-w-[120px]">{r.name}</span>
+                                        <button
+                                            onClick={(e) => deleteResume(r.id, e)}
+                                            className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-opacity"
+                                        >
+                                            <Trash2 className="w-3 h-3" />
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
                 </div>
 
                 {/* Job Description */}
@@ -126,15 +221,44 @@ export function ResumeForm() {
                         <label className="text-sm font-medium leading-none">
                             Custom Instructions (Optional)
                         </label>
-                        <button
-                            onClick={savePrompt}
-                            type="button"
-                            disabled={!prompt}
-                            className="text-xs text-primary hover:underline font-medium disabled:opacity-50 disabled:no-underline"
-                        >
-                            + Save to Favorites
-                        </button>
+                        {!isSavingPrompt ? (
+                            <button
+                                onClick={() => setIsSavingPrompt(true)}
+                                type="button"
+                                disabled={!prompt}
+                                className="text-xs text-primary hover:underline font-medium disabled:opacity-50 disabled:no-underline flex items-center gap-1"
+                            >
+                                <Save className="w-3 h-3" />
+                                Save to Favorites
+                            </button>
+                        ) : (
+                            <div className="flex items-center gap-2 animate-in fade-in slide-in-from-right-2">
+                                <input
+                                    autoFocus
+                                    className="h-6 w-32 rounded border border-input bg-background px-2 text-xs"
+                                    placeholder="Name (e.g. Sales)"
+                                    value={newPromptName}
+                                    onChange={(e) => setNewPromptName(e.target.value)}
+                                />
+                                <button
+                                    onClick={savePrompt}
+                                    type="button"
+                                    disabled={!newPromptName}
+                                    className="text-xs bg-primary text-primary-foreground px-2 py-1 rounded hover:opacity-90 disabled:opacity-50"
+                                >
+                                    Save
+                                </button>
+                                <button
+                                    onClick={() => setIsSavingPrompt(false)}
+                                    type="button"
+                                    className="text-xs text-muted-foreground hover:text-foreground"
+                                >
+                                    Cancel
+                                </button>
+                            </div>
+                        )}
                     </div>
+
                     <input
                         className="flex h-10 w-full rounded-md border border-input bg-background/50 px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
                         placeholder="e.g. Focus on leadership skills..."
@@ -142,18 +266,20 @@ export function ResumeForm() {
                         onChange={(e) => setPrompt(e.target.value)}
                     />
 
-                    {/* Saved Prompts */}
+                    {/* Saved Prompts Chips */}
                     {savedPrompts.length > 0 && (
                         <div className="flex flex-wrap gap-2 pt-1">
                             {savedPrompts.map((p, idx) => (
                                 <div
                                     key={idx}
-                                    onClick={() => setPrompt(p)}
-                                    className="group flex items-center gap-2 bg-secondary/50 hover:bg-secondary text-secondary-foreground px-3 py-1 rounded-full text-xs cursor-pointer transition-colors max-w-full"
+                                    onClick={() => setPrompt(p.content)}
+                                    title={p.content}
+                                    className="group flex items-center gap-2 bg-secondary/50 hover:bg-secondary text-secondary-foreground px-3 py-1.5 rounded-full text-xs cursor-pointer transition-colors max-w-full border border-transparent hover:border-primary/20"
                                 >
-                                    <span className="truncate max-w-[200px]">{p}</span>
+                                    <Sparkles className="w-3 h-3 text-primary" />
+                                    <span className="font-medium truncate max-w-[150px]">{p.name}</span>
                                     <button
-                                        onClick={(e) => deletePrompt(p, e)}
+                                        onClick={(e) => deletePrompt(idx, e)}
                                         className="opacity-0 group-hover:opacity-100 hover:text-destructive transition-opacity"
                                     >
                                         ×

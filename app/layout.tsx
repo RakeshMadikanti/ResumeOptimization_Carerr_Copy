@@ -1,27 +1,25 @@
 import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
 import './globals.css'
-import { cn } from '@/lib/utils'
+import { ClerkProvider } from '@clerk/nextjs'
 
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
-    title: 'AutoResume | AI Resume Tailor',
-    description: 'Instantly tailor your resume to any job description using AI.',
+    title: 'AutoResume | AI-Powered Resume Tailor',
+    description: 'Preserve your formatting while tailoring your resume to any job description.',
 }
 
 export default function RootLayout({
     children,
-}: {
+}: Readonly<{
     children: React.ReactNode
-}) {
+}>) {
     return (
-        <html lang="en" className="dark">
-            <body className={cn(inter.className, "min-h-screen bg-background font-sans antialiased")}>
-                <div className="relative flex min-h-screen flex-col">
-                    {children}
-                </div>
-            </body>
-        </html>
+        <ClerkProvider>
+            <html lang="en">
+                <body className={inter.className}>{children}</body>
+            </html>
+        </ClerkProvider>
     )
 }
