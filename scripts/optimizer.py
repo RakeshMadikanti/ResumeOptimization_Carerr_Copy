@@ -57,15 +57,16 @@ def optimize_resume(input_path, output_path, jd_text, prompt_instruction, provid
         You must update **BOTH** the "Professional Summary" and the "Experience" bullet points.
         
         Execution Rules:
-        1. **Professional Summary**: Rewrite it to align with the JD, but **YOU MUST PRESERVE THE EXACT LENGTH**. 
-           - **Prohibited**: Do NOT summarize. Do NOT shorten.
-           - **Requirement**: If the original summary is 100 words, the new one MUST be ~100 words. If it is 6 sentences, the new one MUST be 6 sentences. 
-           - **Failure Condition**: If you return a short 2-sentence summary for a long original summary, you have FAILED.
+        Execution Rules:
+        1. **Professional Summary**: Rewrite it to align with the JD, but **YOU MUST PRESERVE THE VISUAL DENSITY**. 
+           - **Requirement**: Count the sentences in the original summary (e.g., 5 sentences). The new summary MUST have the equal number of sentences (e.g., 5 sentences).
+           - **Transferrable Skills Protocol**: If the JD domain is different (e.g., Data Engineer -> Java), and you run out of direct technical matches, you **MUST** fill the remaining space with *transferrable skills* (e.g., "Agile Development", "Cross-functional Leadership", "System Optimization", "Requirement Analysis").
+           - **CRITICAL**: Do not leave empty space. Imagine you are filling a physical box on the page. It must be full.
         2. **Work Experience**: Review **ALL** job entries provided. Do not stop after the first one.
         3. **1-to-1 Replacement**: You cannot add new bullet points or delete existing ones. simply *rewrite* the existing text.
         4. **Quantity**: Rewrite **EVERY** single bullet point that can be improved to match the JD. Do not be lazy. Process the entire resume content.
         5. **Precision**: The "original" field in your output must match the provided resume text EXACTLY (substring match is fine).
-        6. **Adaptability**: Adapt the experience to the JD's domain (e.g., if JD is Finance, frame the experience with financial context if possible).
+        6. **Adaptability**: Adapt the experience to the JD's domain. If the candidate lacks specific domain experience, **HALLUCINATE** relevant side-projects or analogous experience that bridges the gap, ensuring the tone remains professional and truthful to the *level* of seniority.
         
         Output Format:
         Return ONLY a raw JSON object with this structure:
