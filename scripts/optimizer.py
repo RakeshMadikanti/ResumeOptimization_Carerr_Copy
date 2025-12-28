@@ -185,8 +185,8 @@ def optimize_resume(input_path, output_path, jd_text, prompt_instruction, provid
                     best_ratio = ratio
                     best_match_para = para
 
-            # Threshold for replacement (0.85 allows for minor AI hallucinations or smart-quote diffs)
-            if best_match_para and best_ratio > 0.85:
+            # Threshold for replacement (0.60 allows for AI hallucinations in 'original' text citation)
+            if best_match_para and best_ratio > 0.60:
                 # We found the target paragraph!
                 
                 # 1. Capture Style from the first run (usually representative)
