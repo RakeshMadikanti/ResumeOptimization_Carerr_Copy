@@ -11,7 +11,8 @@ export async function POST(req: NextRequest) {
     try {
         const formData = await req.formData();
         const file = formData.get("resume") as File;
-        const jd = formData.get("jd") as string;
+        const jdsJson = formData.get("jds") as string;
+        const namesJson = formData.get("names") as string;
         const prompt = formData.get("prompt") as string;
 
         const provider = formData.get("provider") as string;
@@ -27,70 +28,117 @@ export async function POST(req: NextRequest) {
             if (!apiKey) return NextResponse.json({ error: "Missing GEMINI_API_KEY" }, { status: 500 });
         }
 
-        if (!file || !jd) {
-            return NextResponse.json({ error: "Missing file or JD" }, { status: 400 });
+        if (!file || !jdsJson || !namesJson) {
+            return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
+        }
+
+        // Parse arrays
+        const jds: string[] = JSON.parse(jdsJson);
+        const names: string[] = JSON.parse(namesJson);
+
+        if (jds.length === 0 || jds.length !== names.length) {
+            return NextResponse.json({ error: "Invalid JDs or names" }, { status: 400 });
         }
 
         const buffer = Buffer.from(await file.arrayBuffer());
         const tempDir = os.tmpdir();
         const inputPath = join(tempDir, `input_${Date.now()}.docx`);
-        const outputPath = join(tempDir, `output_${Date.now()}.docx`);
 
         await writeFile(inputPath, buffer);
 
-        // Call Python Script
-        // Escaping arguments is important but for MVP we assume simple text or robust python arg handling
-        // We'll use a safer way if possible, or just quote content. 
-        // Passing large text via command line is bad. We should write JD/Prompt to files too.
+        // Process each JD sequentially
+        const results: Array<{ name: string; buffer?: Buffer; error?: string; jobTitle?: string; companyName?: string }> = [];
+        const tempFiles: string[] = [inputPath];
 
-        const jdPath = join(tempDir, `jd_${Date.now()}.txt`);
-        const promptPath = join(tempDir, `prompt_${Date.now()}.txt`);
+        for (let i = 0; i < jds.length; i++) {
+            const jd = jds[i];
+            const customName = names[i];
+            const outputPath = join(tempDir, `output_${Date.now()}_${i}.docx`);
+            const jdPath = join(tempDir, `jd_${Date.now()}_${i}.txt`);
+            const promptPath = join(tempDir, `prompt_${Date.now()}_${i}.txt`);
 
-        await writeFile(jdPath, jd);
-        await writeFile(promptPath, prompt);
+            tempFiles.push(outputPath, jdPath, promptPath);
 
-        const scriptPath = join(process.cwd(), "scripts", "optimizer.py");
+            try {
+                await writeFile(jdPath, jd);
+                await writeFile(promptPath, prompt);
 
-        // Command: python script.py <input> <output> <jd_path> <prompt_path> <provider> <model> <key>
-        const command = `python "${scriptPath}" "${inputPath}" "${outputPath}" "${jdPath}" "${promptPath}" "${provider}" "${model}" "${apiKey}"`;
+                const scriptPath = join(process.cwd(), "scripts", "optimizer.py");
+                const command = `python "${scriptPath}" "${inputPath}" "${outputPath}" "${jdPath}" "${promptPath}" "${provider}" "${model}" "${apiKey}"`;
 
-        let result;
-        let stdout = "";
-        try {
-            const { stdout: scriptStdout } = await execAsync(command);
-            stdout = scriptStdout; // Store stdout for potential error logging
-            result = JSON.parse(stdout);
-        } catch (e: any) {
-            console.error("Failed to parse script output:", stdout, e);
-            return NextResponse.json({ error: "Failed to parse optimization result" }, { status: 500 });
+                const { stdout } = await execAsync(command);
+                const result = JSON.parse(stdout);
+
+                if (result.status === "success") {
+                    const fileBuffer = await readFile(outputPath);
+                    // Use custom name, or AI-suggested filename, or fallback
+                    const finalName = customName.trim() || result.suggested_filename || `Optimized_Resume_${i + 1}`;
+                    results.push({
+                        name: `${finalName}.docx`,
+                        buffer: fileBuffer,
+                        jobTitle: result.job_title || "N/A",
+                        companyName: result.company_name || "N/A"
+                    });
+                } else {
+                    results.push({ name: `${customName}.docx`, error: result.message || "Unknown error" });
+                }
+            } catch (e: any) {
+                console.error(`Failed to process JD ${i + 1}:`, e);
+                results.push({ name: `${customName}.docx`, error: e.message || "Processing failed" });
+            }
         }
 
-        const fileBuffer = await readFile(outputPath);
+        // Create ZIP file
+        const JSZip = (await import('jszip')).default;
+        const zip = new JSZip();
+
+        let successCount = 0;
+        let failureCount = 0;
+
+        for (const result of results) {
+            if (result.buffer) {
+                zip.file(result.name, result.buffer);
+                successCount++;
+            } else {
+                zip.file(`ERROR_${result.name}.txt`, `Failed to optimize: ${result.error}`);
+                failureCount++;
+            }
+        }
+
+        // Add summary file
+        const summary = `Batch Processing Summary
+Total: ${results.length}
+Successful: ${successCount}
+Failed: ${failureCount}
+
+Detailed Results:
+${results.map((r, i) => {
+            if (r.buffer) {
+                return `${i + 1}. ${r.name}: SUCCESS - ${r.companyName} - ${r.jobTitle}`;
+            } else {
+                return `${i + 1}. ${r.name}: FAILED - ${r.error}`;
+            }
+        }).join('\n')}
+`;
+        zip.file("BATCH_SUMMARY.txt", summary);
+
+        const zipBuffer = await zip.generateAsync({ type: 'nodebuffer' });
 
         // Cleanup
-        await unlink(inputPath);
-        try { await unlink(outputPath); } catch { }
-        await unlink(jdPath);
-        await unlink(promptPath);
+        for (const tempFile of tempFiles) {
+            try { await unlink(tempFile); } catch { }
+        }
 
-        // Return the file as a standardized Blob (Prevent Corruption)
-        // Pass Verification Data via Custom Headers
-
-        const verification = result.verification || {};
-        const safeFeedback = (verification.feedback || "").replace(/[\r\n]+/g, " "); // Sanitize headers
-
-        return new NextResponse(fileBuffer, {
+        return new NextResponse(new Uint8Array(zipBuffer), {
             headers: {
-                "Content-Type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                "Content-Disposition": `attachment; filename="optimized_${file.name}"`,
-                "X-Analysis-Score": String(verification.score || 0),
-                "X-Analysis-Optimized": String(verification.is_optimized || false),
-                "X-Analysis-Feedback": Buffer.from(safeFeedback).toString('base64') // Base64 encode for safe header transport
+                "Content-Type": "application/zip",
+                "Content-Disposition": `attachment; filename="batch_resumes_${Date.now()}.zip"`,
+                "X-Batch-Summary": `${successCount}/${results.length} successful`,
             },
         });
 
     } catch (error: any) {
-        console.error("Optimization error:", error);
+        console.error("Batch optimization error:", error);
         return NextResponse.json({ error: error.message || "Internal Error" }, { status: 500 });
     }
 }
