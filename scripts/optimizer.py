@@ -54,24 +54,40 @@ def optimize_resume(input_path, output_path, jd_text, prompt_instruction, provid
         
         resume_content = "\n".join(full_text)
         
-        system_prompt = f"""You are a resume optimizer. Rewrite resume content to match the job description.
-
-**Goal**: {prompt_instruction}
-
-**Rules**:
-1. Rewrite Professional Summary to match JD. Keep EXACT same number of sentences.
-2. Rewrite each experience bullet point to include relevant keywords from JD.
-3. If domains differ (e.g., Java resume for Data Engineering JD), completely rewrite bullets.
-4. Return "original" as exact text from resume, "new" as your rewritten version.
-
-**Output**: Return ONLY this JSON:
-{{"replacements": [{{"original": "exact resume text", "new": "rewritten text"}}]}}"""
+        system_prompt = f"""
+        You are a resume rewriter. Your job is simple:
         
-        user_prompt = f"""JD:
-{jd_text}
-
-Resume:
-{resume_content}"""
+        **Goal**: {prompt_instruction}
+        
+        **CRITICAL INSTRUCTIONS**:
+        1. You will receive a Resume and a Job Description (JD).
+        2. **PROFESSIONAL SUMMARY - STRICT LENGTH RULE**:
+           - Count the EXACT number of sentences in the original Professional Summary.
+           - Your rewritten summary MUST have the EXACT SAME number of sentences.
+           - If original has 3 sentences, output MUST have exactly 3 sentences.
+           - DO NOT shorten or lengthen the summary under any circumstances.
+        3. You MUST rewrite **EVERY SINGLE Experience bullet point** to match the JD. Do NOT skip any.
+        4. For EACH paragraph/bullet in the resume, you MUST provide a replacement. No exceptions.
+        5. The "original" field must be an EXACT copy-paste of the text from the resume I provide.
+        6. The "new" field must be your rewritten version that aligns with the JD.
+        7. If the domain is different (e.g., Java resume for a Data Engineering JD), completely rewrite the bullet point to be relevant.
+        
+        **Output Format**:
+        Return ONLY a raw JSON object:
+        {{
+            "replacements": [
+                {{"original": "exact text from resume", "new": "rewritten text for JD"}}
+            ]
+        }}
+        """
+        
+        user_prompt = f"""
+        Job Description:
+        {jd_text}
+        
+        Resume Content:
+        {resume_content}
+        """
 
         # Select Provider
         if provider.lower() == 'openai':
