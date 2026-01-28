@@ -61,35 +61,27 @@ def optimize_resume(input_path, output_path, jd_text, prompt_instruction, provid
         
         **CRITICAL INSTRUCTIONS**:
         1. You will receive a Resume and a Job Description (JD).
-        2. **EXTRACT THE COMPANY NAME** from the JD (e.g., "Google", "Meta", "Amazon", "Microsoft").
-        3. **EXTRACT THE JOB TITLE** from the JD (e.g., "Senior Data Engineer", "Software Engineer", "Cloud Architect").
-        4. **GENERATE A SUGGESTED FILENAME** in format: CompanyName_RoleAbbreviation (e.g., "Google_SWE", "Meta_DataEng", "Amazon_Cloud").
-        5. **UPDATE THE RESUME'S PROFESSIONAL TITLE/HEADLINE** to match the extracted job title. This is typically the first line after the name or in the summary section.
-        6. You MUST rewrite the **Professional Summary** to match the JD. Keep the SAME length (same number of sentences).
-        7. You MUST rewrite **EVERY SINGLE Experience bullet point** to match the JD. Do NOT skip any.
-        8. For EACH paragraph/bullet in the resume, you MUST provide a replacement. No exceptions.
-        9. The "original" field must be an EXACT copy-paste of the text from the resume I provide.
-        10. The "new" field must be your rewritten version that aligns with the JD.
-        11. If the domain is different (e.g., Java resume for a Data Engineering JD), you MUST completely rewrite the bullet point to be relevant. Do not try to "bridge" - just REPLACE.
-        
-        **IMPORTANT - Filename Generation**:
-        - Extract company name (e.g., "Google", "Meta", "Amazon")
-        - Extract job title and abbreviate if needed (e.g., "Software Engineer" → "SWE", "Data Engineer" → "DataEng")
-        - Combine as: CompanyName_RoleAbbreviation
-        - Use underscores, no spaces
-        - Keep it concise (max 30 characters)
+        2. **EXTRACT THE JOB TITLE** from the JD (e.g., "Senior Data Engineer", "Software Engineer").
+        3. **UPDATE THE RESUME'S PROFESSIONAL TITLE/HEADLINE** to match the extracted job title.
+        4. **PROFESSIONAL SUMMARY - STRICT LENGTH RULE**:
+           - Count the EXACT number of sentences in the original Professional Summary.
+           - Your rewritten summary MUST have the EXACT SAME number of sentences.
+           - If original has 3 sentences, output MUST have exactly 3 sentences.
+           - DO NOT shorten or lengthen the summary under any circumstances.
+        5. You MUST rewrite **EVERY SINGLE Experience bullet point** to match the JD. Do NOT skip any.
+        6. For EACH paragraph/bullet in the resume, you MUST provide a replacement. No exceptions.
+        7. The "original" field must be an EXACT copy-paste of the text from the resume I provide.
+        8. The "new" field must be your rewritten version that aligns with the JD.
+        9. If the domain is different (e.g., Java resume for a Data Engineering JD), completely rewrite the bullet point to be relevant.
         
         **IMPORTANT - Job Title Matching**:
         - Find the job title in the resume (usually right after the name or in the header)
         - Replace it with the job title from the JD
-        - Example: If resume says "Data Analyst" but JD is for "Senior Data Engineer", change it to "Senior Data Engineer"
         
         **Output Format**:
         Return ONLY a raw JSON object:
         {{
-            "company_name": "Extracted company name",
             "job_title": "Extracted job title from JD",
-            "suggested_filename": "CompanyName_RoleAbbreviation",
             "verification_report": {{
                 "score": 0-100,
                 "is_optimized": true/false,
@@ -101,9 +93,9 @@ def optimize_resume(input_path, output_path, jd_text, prompt_instruction, provid
         }}
         
         **FAILURE CONDITIONS**:
-        - If you return fewer replacements than the number of paragraphs in the resume, you have FAILED.
+        - If Professional Summary has different sentence count than original, you have FAILED.
+        - If you return fewer replacements than the number of paragraphs, you have FAILED.
         - If any bullet point is left unchanged, you have FAILED.
-        - If you don't extract the company name, job title, or suggested filename, you have FAILED.
         """
         
         user_prompt = f"""
@@ -142,16 +134,10 @@ def optimize_resume(input_path, output_path, jd_text, prompt_instruction, provid
 
         replacements = data.get("replacements", [])
         job_title = data.get("job_title", "")
-        company_name = data.get("company_name", "")
-        suggested_filename = data.get("suggested_filename", "")
         
-        # Log extracted information for debugging
+        # Log extracted job title for debugging
         if job_title:
             print(f"# Extracted Job Title: {job_title}", file=sys.stderr)
-        if company_name:
-            print(f"# Extracted Company: {company_name}", file=sys.stderr)
-        if suggested_filename:
-            print(f"# Suggested Filename: {suggested_filename}", file=sys.stderr)
         
         # Replace in document
         changes_count = 0
@@ -263,8 +249,6 @@ def optimize_resume(input_path, output_path, jd_text, prompt_instruction, provid
             "status": "success", 
             "changes": changes_count,
             "job_title": job_title,
-            "company_name": company_name,
-            "suggested_filename": suggested_filename,
             "verification": verification
         }))
 

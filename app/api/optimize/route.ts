@@ -47,7 +47,7 @@ export async function POST(req: NextRequest) {
         await writeFile(inputPath, buffer);
 
         // Process each JD sequentially
-        const results: Array<{ name: string; buffer?: Buffer; error?: string; jobTitle?: string; companyName?: string }> = [];
+        const results: Array<{ name: string; buffer?: Buffer; error?: string; jobTitle?: string }> = [];
         const tempFiles: string[] = [inputPath];
 
         for (let i = 0; i < jds.length; i++) {
@@ -71,16 +71,15 @@ export async function POST(req: NextRequest) {
 
                 if (result.status === "success") {
                     const fileBuffer = await readFile(outputPath);
-                    // Use custom name, or AI-suggested filename, or fallback
-                    const finalName = customName.trim() || result.suggested_filename || `Optimized_Resume_${i + 1}`;
+                    // Use custom name or fallback to Optimized_Resume
+                    const finalName = customName.trim() || `Optimized_Resume_${i + 1}`;
                     results.push({
                         name: `${finalName}.docx`,
                         buffer: fileBuffer,
-                        jobTitle: result.job_title || "N/A",
-                        companyName: result.company_name || "N/A"
+                        jobTitle: result.job_title || "N/A"
                     });
                 } else {
-                    results.push({ name: `${customName}.docx`, error: result.message || "Unknown error" });
+                    results.push({ name: `${customName || `Optimized_Resume_${i + 1}`}.docx`, error: result.message || "Unknown error" });
                 }
             } catch (e: any) {
                 console.error(`Failed to process JD ${i + 1}:`, e);
@@ -114,7 +113,7 @@ Failed: ${failureCount}
 Detailed Results:
 ${results.map((r, i) => {
             if (r.buffer) {
-                return `${i + 1}. ${r.name}: SUCCESS - ${r.companyName} - ${r.jobTitle}`;
+                return `${i + 1}. ${r.name}: SUCCESS - Tailored for "${r.jobTitle}"`;
             } else {
                 return `${i + 1}. ${r.name}: FAILED - ${r.error}`;
             }
