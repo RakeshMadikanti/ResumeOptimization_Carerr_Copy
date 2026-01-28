@@ -54,60 +54,24 @@ def optimize_resume(input_path, output_path, jd_text, prompt_instruction, provid
         
         resume_content = "\n".join(full_text)
         
-        system_prompt = f"""
-        You are a resume rewriter. Your job is simple:
+        system_prompt = f"""You are a resume optimizer. Rewrite resume content to match the job description.
+
+**Goal**: {prompt_instruction}
+
+**Rules**:
+1. Rewrite Professional Summary to match JD. Keep EXACT same number of sentences.
+2. Rewrite each experience bullet point to include relevant keywords from JD.
+3. If domains differ (e.g., Java resume for Data Engineering JD), completely rewrite bullets.
+4. Return "original" as exact text from resume, "new" as your rewritten version.
+
+**Output**: Return ONLY this JSON:
+{{"replacements": [{{"original": "exact resume text", "new": "rewritten text"}}]}}"""
         
-        **Goal**: {prompt_instruction}
-        
-        **CRITICAL INSTRUCTIONS**:
-        1. You will receive a Resume and a Job Description (JD).
-        2. **EXTRACT THE JOB TITLE** from the JD (e.g., "Senior Data Engineer", "Software Engineer").
-        3. **UPDATE THE RESUME'S PROFESSIONAL TITLE/HEADLINE** to match the extracted job title.
-        4. **PROFESSIONAL SUMMARY - STRICT LENGTH RULE**:
-           - Count the EXACT number of sentences in the original Professional Summary.
-           - Your rewritten summary MUST have the EXACT SAME number of sentences.
-           - If original has 3 sentences, output MUST have exactly 3 sentences.
-           - DO NOT shorten or lengthen the summary under any circumstances.
-        5. You MUST rewrite **EVERY SINGLE Experience bullet point** to match the JD. Do NOT skip any.
-        6. For EACH paragraph/bullet in the resume, you MUST provide a replacement. No exceptions.
-        7. The "original" field must be an EXACT copy-paste of the text from the resume I provide.
-        8. The "new" field must be your rewritten version that aligns with the JD.
-        9. If the domain is different (e.g., Java resume for a Data Engineering JD), completely rewrite the bullet point to be relevant.
-        
-        **IMPORTANT - Job Title Matching**:
-        - Find the job title in the resume (usually right after the name or in the header)
-        - Replace it with the job title from the JD
-        
-        **Output Format**:
-        Return ONLY a raw JSON object:
-        {{
-            "job_title": "Extracted job title from JD",
-            "verification_report": {{
-                "score": 0-100,
-                "is_optimized": true/false,
-                "feedback": "Brief 1-sentence summary."
-            }},
-            "replacements": [
-                {{"original": "exact text from resume", "new": "rewritten text for JD"}}
-            ]
-        }}
-        
-        **FAILURE CONDITIONS**:
-        - If Professional Summary has different sentence count than original, you have FAILED.
-        - If you return fewer replacements than the number of paragraphs, you have FAILED.
-        - If any bullet point is left unchanged, you have FAILED.
-        """
-        
-        user_prompt = f"""
-        Job Description:
-        {jd_text}
-        
-        Resume Content:
-        {resume_content}
-        
-        **Self-Correction Task**: Before returning, evaluate your own rewrites. 
-        If you failed to include critical Keywords from the JD (e.g. "Java" or "AWS" was missing in the output), mark 'is_optimized' as false.
-        """
+        user_prompt = f"""JD:
+{jd_text}
+
+Resume:
+{resume_content}"""
 
         # Select Provider
         if provider.lower() == 'openai':
