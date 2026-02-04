@@ -40,7 +40,7 @@ export function ResumeForm() {
     const [status, setStatus] = useState<"idle" | "uploading" | "processing" | "completed" | "error">("idle");
     const [processingProgress, setProcessingProgress] = useState({ current: 0, total: 0, currentName: "" });
     const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
-    const [processingJdId, setProcessingJdId] = useState<string | null>(null);
+    const [processingJdId, setProcessingJdId] = useState<Set<string>>(new Set());
 
     // Load saved prompts & resumes on mount
     useEffect(() => {
@@ -138,8 +138,7 @@ export function ResumeForm() {
     const handleOptimizeSingle = async (jd: JobDescription) => {
         if (!file || !jd.description.trim()) return;
 
-        setProcessingJdId(jd.id);
-        setStatus("processing");
+        setProcessingJdId(prev => new Set(prev).add(jd.id));
 
         const formData = new FormData();
         formData.append("resume", file);
@@ -178,7 +177,11 @@ export function ResumeForm() {
             setStatus("error");
             alert(error.message || 'Error optimizing resume');
         } finally {
-            setProcessingJdId(null);
+            setProcessingJdId(prev => {
+                const newSet = new Set(prev);
+                newSet.delete(jd.id);
+                return newSet;
+            });
         }
     };
 
@@ -354,14 +357,14 @@ export function ResumeForm() {
                             <button
                                 type="button"
                                 onClick={() => handleOptimizeSingle(jd)}
-                                disabled={!file || !jd.description.trim() || processingJdId !== null}
+                                disabled={!file || !jd.description.trim() || processingJdId.has(jd.id)}
                                 className={cn(
                                     "w-full h-10 rounded-md font-medium text-sm flex items-center justify-center gap-2 transition-all",
                                     "bg-primary/10 text-primary hover:bg-primary/20 border border-primary/30",
                                     "disabled:opacity-50 disabled:cursor-not-allowed"
                                 )}
                             >
-                                {processingJdId === jd.id ? (
+                                {processingJdId.has(jd.id) ? (
                                     <>
                                         <Loader2 className="h-4 w-4 animate-spin" />
                                         Optimizing...
