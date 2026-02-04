@@ -40,6 +40,7 @@ export function ResumeForm() {
     const [status, setStatus] = useState<"idle" | "uploading" | "processing" | "completed" | "error">("idle");
     const [processingProgress, setProcessingProgress] = useState({ current: 0, total: 0, currentName: "" });
     const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
+    const [processingJdId, setProcessingJdId] = useState<string | null>(null);
 
     // Load saved prompts & resumes on mount
     useEffect(() => {
@@ -131,6 +132,54 @@ export function ResumeForm() {
         setJobDescriptions(jobDescriptions.map(jd =>
             jd.id === id ? { ...jd, [field]: value } : jd
         ));
+    };
+
+    // Handle individual JD optimization - downloads DOCX directly
+    const handleOptimizeSingle = async (jd: JobDescription) => {
+        if (!file || !jd.description.trim()) return;
+
+        setProcessingJdId(jd.id);
+        setStatus("processing");
+
+        const formData = new FormData();
+        formData.append("resume", file);
+        formData.append("jd", jd.description);
+        formData.append("name", jd.companyRole.trim() || "Optimized_Resume");
+        formData.append("prompt", prompt || "Highlight experience relevant to the job requirements.");
+        formData.append("provider", provider);
+        formData.append("model", model);
+
+        try {
+            const response = await fetch("/api/optimize-single", {
+                method: "POST",
+                body: formData,
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(errorData.error || 'Optimization failed');
+            }
+
+            // Download DOCX directly
+            const blob = await response.blob();
+            const fileName = jd.companyRole.trim() || "Optimized_Resume";
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${fileName}.docx`;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+
+            setStatus("completed");
+        } catch (error: any) {
+            console.error(error);
+            setStatus("error");
+            alert(error.message || 'Error optimizing resume');
+        } finally {
+            setProcessingJdId(null);
+        }
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -300,6 +349,30 @@ export function ResumeForm() {
                                 value={jd.description}
                                 onChange={(e) => updateJobDescription(jd.id, "description", e.target.value)}
                             />
+
+                            {/* Individual Optimize Button */}
+                            <button
+                                type="button"
+                                onClick={() => handleOptimizeSingle(jd)}
+                                disabled={!file || !jd.description.trim() || processingJdId !== null}
+                                className={cn(
+                                    "w-full h-10 rounded-md font-medium text-sm flex items-center justify-center gap-2 transition-all",
+                                    "bg-primary/10 text-primary hover:bg-primary/20 border border-primary/30",
+                                    "disabled:opacity-50 disabled:cursor-not-allowed"
+                                )}
+                            >
+                                {processingJdId === jd.id ? (
+                                    <>
+                                        <Loader2 className="h-4 w-4 animate-spin" />
+                                        Optimizing...
+                                    </>
+                                ) : (
+                                    <>
+                                        <Sparkles className="h-4 w-4" />
+                                        Optimize for this JD
+                                    </>
+                                )}
+                            </button>
                         </div>
                     ))}
                 </div>
