@@ -36,7 +36,7 @@ export function ResumeForm() {
     const [newPromptName, setNewPromptName] = useState("");
 
     const [provider] = useState("openai");
-    const [model, setModel] = useState("gpt-5.1");
+    const [model, setModel] = useState("gpt-5.1-chat-latest");
     const [status, setStatus] = useState<"idle" | "uploading" | "processing" | "completed" | "error">("idle");
     const [processingProgress, setProcessingProgress] = useState({ current: 0, total: 0, currentName: "" });
     const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
@@ -464,11 +464,11 @@ export function ResumeForm() {
                         className="flex h-10 w-full rounded-md border border-input bg-background/50 px-3 py-2 text-sm focus-visible:ring-2 focus-visible:ring-ring"
                     >
                         <optgroup label="🔥 GPT-5 Family (Latest)">
-                            <option value="gpt-5.2">GPT-5.2 (Most Powerful)</option>
-                            <option value="gpt-5.1">GPT-5.1 (Recommended)</option>
+                            <option value="gpt-5.2-chat-latest">GPT-5.2 (Most Powerful)</option>
+                            <option value="gpt-5.1-chat-latest">GPT-5.1 Instant (Recommended)</option>
+                            <option value="gpt-5.1">GPT-5.1 Thinking (Reasoning)</option>
                             <option value="gpt-5">GPT-5 (Flagship)</option>
                             <option value="gpt-5-mini">GPT-5 Mini (Faster)</option>
-                            <option value="gpt-5-nano">GPT-5 Nano (Fastest)</option>
                         </optgroup>
                         <optgroup label="⚡ GPT-4.1 Family">
                             <option value="gpt-4.1">GPT-4.1 (Balanced)</option>
