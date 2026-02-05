@@ -18,15 +18,9 @@ export async function POST(req: NextRequest) {
         const provider = formData.get("provider") as string;
         const model = formData.get("model") as string;
 
-        // Check for API Keys
-        let apiKey = "";
-        if (provider === 'openai') {
-            apiKey = process.env.OPENAI_API_KEY || "";
-            if (!apiKey) return NextResponse.json({ error: "Missing OPENAI_API_KEY" }, { status: 500 });
-        } else {
-            apiKey = process.env.GEMINI_API_KEY || "";
-            if (!apiKey) return NextResponse.json({ error: "Missing GEMINI_API_KEY" }, { status: 500 });
-        }
+        // Check for OpenAI API Key
+        const apiKey = process.env.OPENAI_API_KEY || "";
+        if (!apiKey) return NextResponse.json({ error: "Missing OPENAI_API_KEY" }, { status: 500 });
 
         if (!file || !jd) {
             return NextResponse.json({ error: "Missing required fields" }, { status: 400 });

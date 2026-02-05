@@ -35,8 +35,8 @@ export function ResumeForm() {
     const [isSavingPrompt, setIsSavingPrompt] = useState(false);
     const [newPromptName, setNewPromptName] = useState("");
 
-    const [provider, setProvider] = useState<"gemini" | "openai">("openai");
-    const [model, setModel] = useState("gpt-4o");
+    const [provider] = useState("openai");
+    const [model, setModel] = useState("gpt-5.1");
     const [status, setStatus] = useState<"idle" | "uploading" | "processing" | "completed" | "error">("idle");
     const [processingProgress, setProcessingProgress] = useState({ current: 0, total: 0, currentName: "" });
     const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
@@ -455,44 +455,27 @@ export function ResumeForm() {
                     )}
                 </div>
 
-                {/* AI Settings */}
-                <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                        <label className="text-sm font-medium leading-none">AI Provider</label>
-                        <select
-                            value={provider}
-                            onChange={(e) => {
-                                const p = e.target.value as "gemini" | "openai";
-                                setProvider(p);
-                                setModel(p === "gemini" ? "gemini-1.5-flash" : "gpt-4o");
-                            }}
-                            className="flex h-10 w-full rounded-md border border-input bg-background/50 px-3 py-2 text-sm focus-visible:ring-2 focus-visible:ring-ring"
-                        >
-                            <option value="openai">OpenAI (ChatGPT)</option>
-                            <option value="gemini">Google Gemini</option>
-                        </select>
-                    </div>
-                    <div className="space-y-2">
-                        <label className="text-sm font-medium leading-none">Model</label>
-                        <select
-                            value={model}
-                            onChange={(e) => setModel(e.target.value)}
-                            className="flex h-10 w-full rounded-md border border-input bg-background/50 px-3 py-2 text-sm focus-visible:ring-2 focus-visible:ring-ring"
-                        >
-                            {provider === "openai" ? (
-                                <>
-                                    <option value="gpt-4o">GPT-4o (Best)</option>
-                                    <option value="gpt-4-turbo">GPT-4 Turbo</option>
-                                    <option value="gpt-3.5-turbo">GPT-3.5 Turbo (Fast)</option>
-                                </>
-                            ) : (
-                                <>
-                                    <option value="gemini-1.5-flash">Gemini 1.5 Flash (Fast)</option>
-                                    <option value="gemini-1.5-pro">Gemini 1.5 Pro (Powerful)</option>
-                                </>
-                            )}
-                        </select>
-                    </div>
+                {/* AI Model Selection */}
+                <div className="space-y-2">
+                    <label className="text-sm font-medium leading-none">AI Model</label>
+                    <select
+                        value={model}
+                        onChange={(e) => setModel(e.target.value)}
+                        className="flex h-10 w-full rounded-md border border-input bg-background/50 px-3 py-2 text-sm focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                        <optgroup label="🔥 GPT-5 Family (Latest)">
+                            <option value="gpt-5.2">GPT-5.2 (Most Powerful)</option>
+                            <option value="gpt-5.1">GPT-5.1 (Recommended)</option>
+                            <option value="gpt-5">GPT-5 (Flagship)</option>
+                            <option value="gpt-5-mini">GPT-5 Mini (Faster)</option>
+                            <option value="gpt-5-nano">GPT-5 Nano (Fastest)</option>
+                        </optgroup>
+                        <optgroup label="⚡ GPT-4.1 Family">
+                            <option value="gpt-4.1">GPT-4.1 (Balanced)</option>
+                            <option value="gpt-4.1-mini">GPT-4.1 Mini (Fast)</option>
+                            <option value="gpt-4.1-nano">GPT-4.1 Nano (Budget)</option>
+                        </optgroup>
+                    </select>
                 </div>
 
                 {/* Action Button */}

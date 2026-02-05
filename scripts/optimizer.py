@@ -1,25 +1,10 @@
 import sys
 import json
 import os
-import google.generativeai as genai
 from openai import OpenAI
 from docx import Document
 
-class ModelProvider:
-    def generate(self, system_prompt, user_prompt, api_key, model_name):
-        raise NotImplementedError
-
-class GeminiProvider(ModelProvider):
-    def generate(self, system_prompt, user_prompt, api_key, model_name):
-        genai.configure(api_key=api_key)
-        model = genai.GenerativeModel(model_name)
-        # Combine prompts for Gemini as it differentiates less strictly in some versions, 
-        # but here we just send one block or chat.
-        full_prompt = f"{system_prompt}\n\n{user_prompt}"
-        response = model.generate_content(full_prompt)
-        return response.text
-
-class OpenAIProvider(ModelProvider):
+class OpenAIProvider:
     def generate(self, system_prompt, user_prompt, api_key, model_name):
         client = OpenAI(api_key=api_key)
         response = client.chat.completions.create(
@@ -89,11 +74,8 @@ def optimize_resume(input_path, output_path, jd_text, prompt_instruction, provid
         {resume_content}
         """
 
-        # Select Provider
-        if provider.lower() == 'openai':
-            ai_client = OpenAIProvider()
-        else:
-            ai_client = GeminiProvider()
+        # Always use OpenAI
+        ai_client = OpenAIProvider()
 
         response_text = ai_client.generate(system_prompt, user_prompt, api_key, model_name)
         
