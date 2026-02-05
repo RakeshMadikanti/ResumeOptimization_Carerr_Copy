@@ -58,7 +58,8 @@ export async function POST(req: NextRequest) {
                 await writeFile(promptPath, prompt);
 
                 const scriptPath = join(process.cwd(), "scripts", "optimizer.py");
-                const command = `python "${scriptPath}" "${inputPath}" "${outputPath}" "${jdPath}" "${promptPath}" "${provider}" "${model}" "${apiKey}"`;
+                // API key is read from OPENAI_API_KEY env var by Python script (secure - not in command line)
+                const command = `python "${scriptPath}" "${inputPath}" "${outputPath}" "${jdPath}" "${promptPath}" "${provider}" "${model}"`;
 
                 const { stdout } = await execAsync(command);
                 const result = JSON.parse(stdout);
@@ -77,7 +78,9 @@ export async function POST(req: NextRequest) {
                 }
             } catch (e: any) {
                 console.error(`Failed to process JD ${i + 1}:`, e);
-                results.push({ name: `${customName}.docx`, error: e.message || "Processing failed" });
+                // Sanitize error message - don't expose sensitive data
+                const safeError = (e.message || "Processing failed").replace(/sk-[a-zA-Z0-9_-]+/g, '[REDACTED]');
+                results.push({ name: `${customName}.docx`, error: safeError });
             }
         }
 
@@ -132,6 +135,8 @@ ${results.map((r, i) => {
 
     } catch (error: any) {
         console.error("Batch optimization error:", error);
-        return NextResponse.json({ error: error.message || "Internal Error" }, { status: 500 });
+        // Sanitize error message - don't expose sensitive data
+        const safeError = (error.message || "Internal Error").replace(/sk-[a-zA-Z0-9_-]+/g, '[REDACTED]');
+        return NextResponse.json({ error: safeError }, { status: 500 });
     }
 }

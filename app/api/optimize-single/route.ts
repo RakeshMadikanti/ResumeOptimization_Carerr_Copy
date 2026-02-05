@@ -41,7 +41,8 @@ export async function POST(req: NextRequest) {
             await writeFile(promptPath, prompt || "Highlight experience relevant to the job requirements.");
 
             const scriptPath = join(process.cwd(), "scripts", "optimizer.py");
-            const command = `python "${scriptPath}" "${inputPath}" "${outputPath}" "${jdPath}" "${promptPath}" "${provider}" "${model}" "${apiKey}"`;
+            // API key is read from OPENAI_API_KEY env var by Python script (secure - not in command line)
+            const command = `python "${scriptPath}" "${inputPath}" "${outputPath}" "${jdPath}" "${promptPath}" "${provider}" "${model}"`;
 
             const { stdout } = await execAsync(command);
             const result = JSON.parse(stdout);
@@ -75,10 +76,14 @@ export async function POST(req: NextRequest) {
                 try { await unlink(tempFile); } catch { }
             }
             console.error("Optimization error:", e);
-            return NextResponse.json({ error: e.message || "Processing failed" }, { status: 500 });
+            // Sanitize error message - don't expose sensitive data
+            const safeError = (e.message || "Processing failed").replace(/sk-[a-zA-Z0-9_-]+/g, '[REDACTED]');
+            return NextResponse.json({ error: safeError }, { status: 500 });
         }
     } catch (error: any) {
         console.error("Request error:", error);
-        return NextResponse.json({ error: error.message || "Server error" }, { status: 500 });
+        // Sanitize error message - don't expose sensitive data
+        const safeError = (error.message || "Server error").replace(/sk-[a-zA-Z0-9_-]+/g, '[REDACTED]');
+        return NextResponse.json({ error: safeError }, { status: 500 });
     }
 }

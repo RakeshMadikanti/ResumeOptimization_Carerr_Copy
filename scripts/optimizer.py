@@ -230,7 +230,12 @@ if __name__ == "__main__":
     prompt_arg = sys.argv[4]
     provider_arg = sys.argv[5]
     model_arg = sys.argv[6]
-    key_arg = sys.argv[7]
+    
+    # Get API key from environment variable (secure - not exposed in command line)
+    api_key = os.environ.get('OPENAI_API_KEY', '')
+    if not api_key:
+        print(json.dumps({"status": "error", "message": "OPENAI_API_KEY environment variable not set"}))
+        sys.exit(1)
     
     # Resolve JD
     if os.path.exists(jd_arg):
@@ -246,4 +251,4 @@ if __name__ == "__main__":
     else:
         prompt_t = prompt_arg
     
-    optimize_resume(input_p, output_p, jd_t, prompt_t, provider_arg, model_arg, key_arg)
+    optimize_resume(input_p, output_p, jd_t, prompt_t, provider_arg, model_arg, api_key)
