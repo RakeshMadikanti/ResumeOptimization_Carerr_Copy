@@ -58,7 +58,7 @@ export async function POST(req: NextRequest) {
                 await writeFile(promptPath, prompt);
 
                 const scriptPath = join(process.cwd(), "scripts", "optimizer.py");
-                const command = `python "${scriptPath}" "${inputPath}" "${outputPath}" "${jdPath}" "${promptPath}" "${provider}" "${model}" "${apiKey}"`;
+                const command = `python3 "${scriptPath}" "${inputPath}" "${outputPath}" "${jdPath}" "${promptPath}" "${provider}" "${model}" "${apiKey}"`;
 
                 const { stdout } = await execAsync(command);
                 const result = JSON.parse(stdout);
