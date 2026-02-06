@@ -7,6 +7,12 @@ import os from "os";
 
 const execAsync = promisify(exec);
 
+// Detect the correct Python command based on platform
+const getPythonCommand = () => {
+    // On Windows, it's usually 'python', on Linux/Docker it's 'python3'
+    return process.platform === 'win32' ? 'python' : 'python3';
+};
+
 export async function POST(req: NextRequest) {
     try {
         const formData = await req.formData();
@@ -58,7 +64,8 @@ export async function POST(req: NextRequest) {
                 await writeFile(promptPath, prompt);
 
                 const scriptPath = join(process.cwd(), "scripts", "optimizer.py");
-                const command = `python3 "${scriptPath}" "${inputPath}" "${outputPath}" "${jdPath}" "${promptPath}" "${provider}" "${model}" "${apiKey}"`;
+                const pythonCmd = getPythonCommand();
+                const command = `${pythonCmd} "${scriptPath}" "${inputPath}" "${outputPath}" "${jdPath}" "${promptPath}" "${provider}" "${model}" "${apiKey}"`;
 
                 const { stdout, stderr } = await execAsync(command);
 
