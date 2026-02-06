@@ -43,7 +43,13 @@ export async function POST(req: NextRequest) {
             const scriptPath = join(process.cwd(), "scripts", "optimizer.py");
             const command = `python3 "${scriptPath}" "${inputPath}" "${outputPath}" "${jdPath}" "${promptPath}" "${provider}" "${model}" "${apiKey}"`;
 
-            const { stdout } = await execAsync(command);
+            const { stdout, stderr } = await execAsync(command);
+
+            // Log stderr for debugging (even on success, Python might print warnings)
+            if (stderr) {
+                console.error("Python stderr:", stderr);
+            }
+
             const result = JSON.parse(stdout);
 
             if (result.status === "success") {
@@ -75,9 +81,10 @@ export async function POST(req: NextRequest) {
                 try { await unlink(tempFile); } catch { }
             }
             console.error("Optimization error:", e);
-            // Sanitize error message - don't expose sensitive data
-            const safeError = (e.message || "Processing failed").replace(/sk-[a-zA-Z0-9_-]+/g, '[REDACTED]');
-            return NextResponse.json({ error: safeError }, { status: 500 });
+            // Include stderr in error message for debugging (sanitized)
+            const errorDetails = e.stderr || e.message || "Processing failed";
+            const safeError = errorDetails.replace(/sk-[a-zA-Z0-9_-]+/g, '[REDACTED]');
+            return NextResponse.json({ error: `Failed: ${safeError}` }, { status: 500 });
         }
     } catch (error: any) {
         console.error("Request error:", error);

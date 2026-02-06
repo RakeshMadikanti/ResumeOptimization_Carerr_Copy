@@ -60,7 +60,13 @@ export async function POST(req: NextRequest) {
                 const scriptPath = join(process.cwd(), "scripts", "optimizer.py");
                 const command = `python3 "${scriptPath}" "${inputPath}" "${outputPath}" "${jdPath}" "${promptPath}" "${provider}" "${model}" "${apiKey}"`;
 
-                const { stdout } = await execAsync(command);
+                const { stdout, stderr } = await execAsync(command);
+
+                // Log stderr for debugging
+                if (stderr) {
+                    console.error(`Python stderr for JD ${i + 1}:`, stderr);
+                }
+
                 const result = JSON.parse(stdout);
 
                 if (result.status === "success") {
@@ -77,8 +83,9 @@ export async function POST(req: NextRequest) {
                 }
             } catch (e: any) {
                 console.error(`Failed to process JD ${i + 1}:`, e);
-                // Sanitize error message - don't expose sensitive data
-                const safeError = (e.message || "Processing failed").replace(/sk-[a-zA-Z0-9_-]+/g, '[REDACTED]');
+                // Include stderr in error message for debugging (sanitized)
+                const errorDetails = e.stderr || e.message || "Processing failed";
+                const safeError = errorDetails.replace(/sk-[a-zA-Z0-9_-]+/g, '[REDACTED]');
                 results.push({ name: `${customName}.docx`, error: safeError });
             }
         }
