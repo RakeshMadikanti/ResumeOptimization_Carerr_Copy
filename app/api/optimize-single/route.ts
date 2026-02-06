@@ -41,8 +41,7 @@ export async function POST(req: NextRequest) {
             await writeFile(promptPath, prompt || "Highlight experience relevant to the job requirements.");
 
             const scriptPath = join(process.cwd(), "scripts", "optimizer.py");
-            // API key is read from OPENAI_API_KEY env var by Python script (secure - not in command line)
-            const command = `python "${scriptPath}" "${inputPath}" "${outputPath}" "${jdPath}" "${promptPath}" "${provider}" "${model}"`;
+            const command = `python "${scriptPath}" "${inputPath}" "${outputPath}" "${jdPath}" "${promptPath}" "${provider}" "${model}" "${apiKey}"`;
 
             const { stdout } = await execAsync(command);
             const result = JSON.parse(stdout);

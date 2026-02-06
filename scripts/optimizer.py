@@ -230,11 +230,10 @@ if __name__ == "__main__":
     prompt_arg = sys.argv[4]
     provider_arg = sys.argv[5]
     model_arg = sys.argv[6]
+    api_key = sys.argv[7]
     
-    # Get API key from environment variable (secure - not exposed in command line)
-    api_key = os.environ.get('OPENAI_API_KEY', '')
     if not api_key:
-        print(json.dumps({"status": "error", "message": "OPENAI_API_KEY environment variable not set"}))
+        print(json.dumps({"status": "error", "message": "API key not provided"}))
         sys.exit(1)
     
     # Resolve JD
