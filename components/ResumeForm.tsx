@@ -477,49 +477,7 @@ export function ResumeForm() {
                     </select>
                 </div>
 
-                {/* Action Button */}
-                <button
-                    onClick={handleSubmit}
-                    disabled={!file || jobDescriptions.filter(jd => jd.description.trim()).length === 0 || status === "processing" || status === "uploading"}
-                    className={cn(
-                        "w-full inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 h-11 px-8",
-                        status === "completed" ? "bg-green-600 hover:bg-green-700 text-white" : "bg-primary text-primary-foreground hover:bg-primary/90"
-                    )}
-                >
-                    {status === "processing" || status === "uploading" ? (
-                        <>
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                            {processingProgress.current > 0 ? `Processing ${processingProgress.current}/${processingProgress.total}...` : "Processing..."}
-                        </>
-                    ) : status === "completed" ? (
-                        <>
-                            <Sparkles className="mr-2 h-4 w-4" />
-                            Completed!
-                        </>
-                    ) : (
-                        <>
-                            <Sparkles className="mr-2 h-4 w-4" />
-                            {jobDescriptions.filter(jd => jd.description.trim()).length > 1
-                                ? `Generate ${jobDescriptions.filter(jd => jd.description.trim()).length} Tailored Resumes`
-                                : "Optimize Resume"
-                            }
-                        </>
-                    )}
-                </button>
 
-                {/* Download Section */}
-                {status === "completed" && downloadUrl && (
-                    <div className="pt-4 animate-in fade-in slide-in-from-top-4">
-                        <a
-                            href={downloadUrl}
-                            download={`optimized_${file?.name}`}
-                            className="w-full inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 h-11 px-8 border border-input bg-background hover:bg-accent hover:text-accent-foreground"
-                        >
-                            <Download className="mr-2 h-4 w-4" />
-                            Download Optimized Resume
-                        </a>
-                    </div>
-                )}
 
             </div>
         </div>
