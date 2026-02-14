@@ -14,8 +14,8 @@ export function Features() {
         },
         {
             icon: <Zap className="w-6 h-6" />,
-            title: "Multi-Model AI Support",
-            desc: "Choose between OpenAI's GPT-4o or Google's Gemini 1.5 Pro for the best results."
+            title: "Cutting-Edge AI Models",
+            desc: "Powered by OpenAI's latest GPT-5 and GPT-4.1 family models for best-in-class results."
         },
         {
             icon: <Sparkles className="w-6 h-6" />,

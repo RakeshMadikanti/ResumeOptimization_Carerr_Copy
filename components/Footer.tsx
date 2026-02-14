@@ -6,9 +6,7 @@ export function Footer() {
                     © {new Date().getFullYear()} AutoResume. All rights reserved. Built with Next.js & Python.
                 </p>
                 <div className="flex gap-4">
-                    <a href="#" className="text-sm text-muted-foreground hover:text-foreground">Terms</a>
-                    <a href="#" className="text-sm text-muted-foreground hover:text-foreground">Privacy</a>
-                    <a href="https://github.com/rajasampath125/autoresume" className="text-sm text-muted-foreground hover:text-foreground">GitHub</a>
+                    <a href="https://github.com/rajasampath125/autoresume" target="_blank" rel="noopener noreferrer" className="text-sm text-muted-foreground hover:text-foreground">GitHub</a>
                 </div>
             </div>
         </footer>

@@ -5,8 +5,9 @@ from openai import OpenAI
 from docx import Document
 
 class OpenAIProvider:
-    def generate(self, system_prompt, user_prompt, api_key, model_name):
-        client = OpenAI(api_key=api_key)
+    def generate(self, system_prompt, user_prompt, model_name):
+        # API key is read from OPENAI_API_KEY environment variable
+        client = OpenAI()
         response = client.chat.completions.create(
             model=model_name,
             messages=[
@@ -17,21 +18,171 @@ class OpenAIProvider:
         )
         return response.choices[0].message.content
 
-def optimize_resume(input_path, output_path, jd_text, prompt_instruction, provider, model_name, api_key):
+def copy_style(source_run, target_run):
+    """Copy ALL font attributes from source to target for exact visual match."""
+    try:
+        target_run.bold = source_run.bold
+        target_run.italic = source_run.italic
+        target_run.underline = source_run.underline
+        
+        if source_run.font.strike is not None:
+            target_run.font.strike = source_run.font.strike
+        if source_run.font.double_strike is not None:
+            target_run.font.double_strike = source_run.font.double_strike
+        if source_run.font.subscript is not None:
+            target_run.font.subscript = source_run.font.subscript
+        if source_run.font.superscript is not None:
+            target_run.font.superscript = source_run.font.superscript
+        if source_run.font.small_caps is not None:
+            target_run.font.small_caps = source_run.font.small_caps
+        if source_run.font.all_caps is not None:
+            target_run.font.all_caps = source_run.font.all_caps
+        
+        if source_run.font.name:
+            target_run.font.name = source_run.font.name
+        if source_run.font.size:
+            target_run.font.size = source_run.font.size
+        if source_run.font.color and source_run.font.color.rgb:
+            target_run.font.color.rgb = source_run.font.color.rgb
+    except Exception:
+        pass
+
+def iter_all_paragraphs(document):
+    """Iterate ALL paragraphs: body + tables."""
+    for para in document.paragraphs:
+        yield para
+    for table in document.tables:
+        for row in table.rows:
+            for cell in row.cells:
+                for para in cell.paragraphs:
+                    yield para
+
+def replace_paragraph_text(para, new_text):
+    """Replace paragraph text while preserving formatting."""
+    captured_run = None
+    if para.runs:
+        captured_run = para.runs[0]
+    
+    para.clear()  # Removes content but keeps paragraph style (bullets, indent)
+    new_run = para.add_run(new_text)
+    
+    if captured_run:
+        copy_style(captured_run, new_run)
+
+def optimize_pro(input_path, output_path, jd_text, prompt_instruction, model_name):
+    """
+    PRO MODE: Positional replacement.
+    
+    1. Number each non-empty paragraph [1], [2], [3]...
+    2. Send user's prompt verbatim + numbered resume + JD to ChatGPT
+    3. ChatGPT returns {"replacements": [{"index": 1, "new": "..."}]}
+    4. Replace paragraph at index N with new text. No matching. No thresholds.
+    """
     try:
         doc = Document(input_path)
         
-        # Helper to iterate ALL paragraphs (Body + Tables)
-        def iter_all_paragraphs(document):
-            for para in document.paragraphs:
-                yield para
-            for table in document.tables:
-                for row in table.rows:
-                    for cell in row.cells:
-                        for para in cell.paragraphs:
-                            yield para
+        # Build indexed list of all non-empty paragraphs
+        indexed_paragraphs = []  # list of (index, paragraph_object)
+        for para in iter_all_paragraphs(doc):
+            text = para.text.strip()
+            if text:
+                indexed_paragraphs.append(para)
+        
+        # Build numbered resume content for ChatGPT
+        numbered_lines = []
+        for i, para in enumerate(indexed_paragraphs):
+            numbered_lines.append(f"[{i + 1}] {para.text.strip()}")
+        
+        numbered_resume = "\n".join(numbered_lines)
+        
+        # System prompt: user's prompt + output format
+        system_prompt = f"""{prompt_instruction}
 
-        # specific extraction to keep context
+**CRITICAL OUTPUT FORMAT (MUST follow exactly)**:
+The resume content below is numbered with [1], [2], [3], etc.
+For each point you want to replace, return its number and the new text.
+Return ONLY a raw JSON object in this exact format:
+{{
+    "replacements": [
+        {{"index": 1, "new": "your rewritten text for point 1"}},
+        {{"index": 3, "new": "your rewritten text for point 3"}}
+    ]
+}}
+Only include indexes for points you are changing. Do NOT include the [N] prefix in the "new" text.
+"""
+        
+        user_prompt = f"""Job Description:
+{jd_text}
+
+Resume Content (numbered):
+{numbered_resume}
+"""
+        
+        ai_client = OpenAIProvider()
+        response_text = ai_client.generate(system_prompt, user_prompt, model_name)
+        
+        # Clean response
+        response_text = response_text.replace("```json", "").replace("```", "").strip()
+        
+        try:
+            data = json.loads(response_text)
+        except json.JSONDecodeError:
+            start = response_text.find('{')
+            end = response_text.rfind('}') + 1
+            if start != -1 and end != -1:
+                data = json.loads(response_text[start:end])
+            else:
+                print(json.dumps({"status": "error", "message": "Could not parse AI response"}))
+                sys.exit(1)
+        
+        replacements = data.get("replacements", [])
+        changes_count = 0
+        skipped_count = 0
+        
+        for replacement in replacements:
+            idx = replacement.get("index")
+            new_text = replacement.get("new", "")
+            
+            if idx is None or not new_text:
+                skipped_count += 1
+                print(f"# Skipped: missing index or empty new text", file=sys.stderr)
+                continue
+            
+            # Convert 1-based index to 0-based
+            pos = idx - 1
+            
+            if pos < 0 or pos >= len(indexed_paragraphs):
+                skipped_count += 1
+                print(f"# Skipped: index {idx} out of range (total paragraphs: {len(indexed_paragraphs)})", file=sys.stderr)
+                continue
+            
+            target_para = indexed_paragraphs[pos]
+            old_text = target_para.text.strip()
+            
+            replace_paragraph_text(target_para, new_text)
+            changes_count += 1
+            print(f"# Replaced [{idx}]: '{old_text[:50]}...' -> '{new_text[:50]}...'", file=sys.stderr)
+        
+        print(f"# Pro mode: {changes_count} replaced, {skipped_count} skipped out of {len(replacements)} total", file=sys.stderr)
+        
+        doc.save(output_path)
+        print(json.dumps({
+            "status": "success",
+            "changes": changes_count,
+            "mode": "pro"
+        }))
+    
+    except Exception as e:
+        print(json.dumps({"status": "error", "message": str(e)}))
+        sys.exit(1)
+
+def optimize_basic(input_path, output_path, jd_text, prompt_instruction, model_name):
+    """
+    BASIC MODE: Fuzzy-match replacement (existing behavior).
+    """
+    try:
+        doc = Document(input_path)
+        
         full_text = []
         for para in iter_all_paragraphs(doc):
             if para.text.strip():
@@ -74,154 +225,87 @@ def optimize_resume(input_path, output_path, jd_text, prompt_instruction, provid
         {resume_content}
         """
 
-        # Always use OpenAI
         ai_client = OpenAIProvider()
-
-        response_text = ai_client.generate(system_prompt, user_prompt, api_key, model_name)
+        response_text = ai_client.generate(system_prompt, user_prompt, model_name)
         
-        # Clean response if needed (Gemini sometimes adds backticks)
+        # Clean response
         response_text = response_text.replace("```json", "").replace("```", "").strip()
         
         try:
             data = json.loads(response_text)
         except json.JSONDecodeError:
-            # Fallback scan
             start = response_text.find('{')
             end = response_text.rfind('}') + 1
             if start != -1 and end != -1:
                 data = json.loads(response_text[start:end])
             else:
-                print(json.dumps({"status": "error", "message": "Could not parse AI response", "raw": response_text}))
+                print(json.dumps({"status": "error", "message": "Could not parse AI response"}))
                 sys.exit(1)
 
         replacements = data.get("replacements", [])
-        job_title = data.get("job_title", "")
         
-        # Log extracted job title for debugging
-        if job_title:
-            print(f"# Extracted Job Title: {job_title}", file=sys.stderr)
-        
-        # Replace in document
         changes_count = 0
         from difflib import SequenceMatcher
 
         def similar(a, b):
             return SequenceMatcher(None, a, b).ratio()
 
-        def copy_style(source_run, target_run):
-            """Copy ALL font attributes from source to target for exact visual match."""
-            try:
-                # Basic Formatting
-                target_run.bold = source_run.bold
-                target_run.italic = source_run.italic
-                target_run.underline = source_run.underline
-                
-                # Advanced Formatting
-                if source_run.font.strike is not None:
-                    target_run.font.strike = source_run.font.strike
-                if source_run.font.double_strike is not None:
-                    target_run.font.double_strike = source_run.font.double_strike
-                if source_run.font.subscript is not None:
-                    target_run.font.subscript = source_run.font.subscript
-                if source_run.font.superscript is not None:
-                    target_run.font.superscript = source_run.font.superscript
-                if source_run.font.small_caps is not None:
-                    target_run.font.small_caps = source_run.font.small_caps
-                if source_run.font.all_caps is not None:
-                    target_run.font.all_caps = source_run.font.all_caps
-                
-                # Font Face and Size
-                if source_run.font.name:
-                    target_run.font.name = source_run.font.name
-                
-                if source_run.font.size:
-                    target_run.font.size = source_run.font.size
-                    
-                # Color
-                if source_run.font.color and source_run.font.color.rgb:
-                    target_run.font.color.rgb = source_run.font.color.rgb
-            except Exception:
-                pass
-
         for replacement in replacements:
             original = replacement["original"]
             new_text = replacement["new"]
             
-            # Robust search with Fuzzy Matching
-            # Normalize whitespace for comparison
             norm_original = " ".join(original.split())
             
             best_match_para = None
             best_ratio = 0.0
 
-            # First pass: Look for the best paragraph match
             for para in iter_all_paragraphs(doc):
                 norm_para = " ".join(para.text.split())
                 
-                # Skip empty or too short paragraphs
                 if len(norm_para) < 10:
                     continue
 
-                # Check whole paragraph similarity
                 ratio = similar(norm_original, norm_para)
                 
-                # Check if it's a substring (e.g. one bullet point in a list but docx treats as para)
-                # If the original text is a significant part of the paragraph
-                if  norm_original in norm_para:
-                     ratio = 1.0 # Perfect substring match
-                
+                if norm_original in norm_para:
+                     ratio = 1.0
+
                 if ratio > best_ratio:
                     best_ratio = ratio
                     best_match_para = para
 
-            # Threshold for replacement (0.40 allows for significant AI rewrites of 'original')
             if best_match_para and best_ratio > 0.40:
-                # We found the target paragraph!
-                
-                # 1. Capture Style from the first run (usually representative)
-                captured_run = None
-                if best_match_para.runs:
-                    captured_run = best_match_para.runs[0]
-                
-                # 2. Replace the text
-                # Note: Simply setting .text clears all runs and resets formatting to style default.
-                # We must manually clear runs to keep paragraph-level formatting (bullets, indent)
-                # then add a new run with the cloned style.
-                
-                best_match_para.clear() # Removes content but keeps paragraph style (e.g. List Bullet)
-                new_run = best_match_para.add_run(new_text)
-                
-                # 3. Apply Style
-                if captured_run:
-                    copy_style(captured_run, new_run)
-                
+                replace_paragraph_text(best_match_para, new_text)
                 changes_count += 1
-                # print(f"Output: Replaced (confidence {best_ratio:.2f})")
             else:
-                pass
-                # print(f"Warning: Could not find match for: {original[:30]}...")
+                print(f"# Warning: No match for: {original[:60]}... (best ratio: {best_ratio:.2f})", file=sys.stderr)
 
-        if replacements:
-            best_match_para = None # Reset
-            
-        verification = data.get("verification_report", {"score": 0, "is_optimized": False, "feedback": "No verification data provided."})
-        
         doc.save(output_path)
         print(json.dumps({
             "status": "success", 
             "changes": changes_count,
-            "job_title": job_title,
-            "verification": verification
+            "mode": "basic"
         }))
 
     except Exception as e:
         print(json.dumps({"status": "error", "message": str(e)}))
         sys.exit(1)
 
+def optimize_resume(input_path, output_path, jd_text, prompt_instruction, provider, model_name, mode="basic"):
+    print(f"\n{'='*60}", file=sys.stderr)
+    print(f"  AUTORESUME MODE: {'🟣 PRO (Positional Replacement)' if mode == 'pro' else '🔵 BASIC (Fuzzy Match)'}", file=sys.stderr)
+    print(f"  Model: {model_name}", file=sys.stderr)
+    print(f"{'='*60}\n", file=sys.stderr)
+    if mode == "pro":
+        optimize_pro(input_path, output_path, jd_text, prompt_instruction, model_name)
+    else:
+        optimize_basic(input_path, output_path, jd_text, prompt_instruction, model_name)
+
 if __name__ == "__main__":
-    # segments: script.py input output jd prompt provider model apikey
-    if len(sys.argv) < 8:
-        print("Usage: script.py <input> <output> <jd_or_path> <prompt_or_path> <provider> <model> <apikey>")
+    # segments: script.py input output jd prompt provider model [mode]
+    # API key is read from OPENAI_API_KEY environment variable
+    if len(sys.argv) < 7:
+        print("Usage: script.py <input> <output> <jd_or_path> <prompt_or_path> <provider> <model> [mode]")
         sys.exit(1)
         
     input_p = sys.argv[1]
@@ -230,10 +314,10 @@ if __name__ == "__main__":
     prompt_arg = sys.argv[4]
     provider_arg = sys.argv[5]
     model_arg = sys.argv[6]
-    api_key = sys.argv[7]
+    mode_arg = sys.argv[7] if len(sys.argv) > 7 else "basic"
     
-    if not api_key:
-        print(json.dumps({"status": "error", "message": "API key not provided"}))
+    if not os.environ.get("OPENAI_API_KEY"):
+        print(json.dumps({"status": "error", "message": "OPENAI_API_KEY environment variable not set"}))
         sys.exit(1)
     
     # Resolve JD
@@ -250,4 +334,4 @@ if __name__ == "__main__":
     else:
         prompt_t = prompt_arg
     
-    optimize_resume(input_p, output_p, jd_t, prompt_t, provider_arg, model_arg, api_key)
+    optimize_resume(input_p, output_p, jd_t, prompt_t, provider_arg, model_arg, mode_arg)

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Upload, FileText, Sparkles, Download, Loader2, Trash2, Clock, Pencil, Save } from "lucide-react";
+import { Upload, FileText, Sparkles, Loader2, Trash2, Save, AlertCircle, CheckCircle2, Crown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { saveResumeToDB, getResumesFromDB, deleteResumeFromDB, SavedResume } from "@/lib/db";
 import { useAuth } from "@clerk/nextjs";
@@ -18,7 +18,10 @@ export function ResumeForm() {
     const [prompt, setPrompt] = useState("");
     const [savedPrompts, setSavedPrompts] = useState<SavedPrompt[]>([]);
 
-    // Batch Processing State
+    // Mode: basic or pro
+    const [mode, setMode] = useState<"basic" | "pro">("basic");
+
+    // Job Descriptions
     interface JobDescription {
         id: string;
         companyRole: string;
@@ -35,26 +38,23 @@ export function ResumeForm() {
     const [isSavingPrompt, setIsSavingPrompt] = useState(false);
     const [newPromptName, setNewPromptName] = useState("");
 
-    const [provider] = useState("openai");
     const [model, setModel] = useState("gpt-5.2");
-    const [status, setStatus] = useState<"idle" | "uploading" | "processing" | "completed" | "error">("idle");
-    const [processingProgress, setProcessingProgress] = useState({ current: 0, total: 0, currentName: "" });
-    const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
     const [processingJdId, setProcessingJdId] = useState<Set<string>>(new Set());
+
+    // Per-JD status messages (success or error)
+    const [jdMessages, setJdMessages] = useState<Record<string, { type: "success" | "error"; text: string }>>({});
 
     // Load saved prompts & resumes on mount
     useEffect(() => {
         if (!isLoaded || !userId) return;
 
-        // Load Prompts (User Specific)
         const saved = localStorage.getItem(`savedPrompts_${userId}`);
         if (saved) {
             setSavedPrompts(JSON.parse(saved));
         } else {
-            setSavedPrompts([]); // Reset if switching users
+            setSavedPrompts([]);
         }
 
-        // Load Resumes from DB (User Specific)
         loadResumes(userId);
     }, [isLoaded, userId]);
 
@@ -102,7 +102,6 @@ export function ResumeForm() {
         setSavedPrompts(newPrompts);
         localStorage.setItem(`savedPrompts_${userId}`, JSON.stringify(newPrompts));
 
-        // Reset UI
         setIsSavingPrompt(false);
         setNewPromptName("");
     };
@@ -125,6 +124,11 @@ export function ResumeForm() {
     const removeJobDescription = (id: string) => {
         if (jobDescriptions.length > 1) {
             setJobDescriptions(jobDescriptions.filter(jd => jd.id !== id));
+            setJdMessages(prev => {
+                const next = { ...prev };
+                delete next[id];
+                return next;
+            });
         }
     };
 
@@ -132,21 +136,43 @@ export function ResumeForm() {
         setJobDescriptions(jobDescriptions.map(jd =>
             jd.id === id ? { ...jd, [field]: value } : jd
         ));
+        if (jdMessages[id]) {
+            setJdMessages(prev => {
+                const next = { ...prev };
+                delete next[id];
+                return next;
+            });
+        }
     };
 
-    // Handle individual JD optimization - downloads DOCX directly
+    // Handle individual JD optimization — downloads DOCX directly
     const handleOptimizeSingle = async (jd: JobDescription) => {
         if (!file || !jd.description.trim()) return;
 
+        // In Pro mode, prompt is required
+        if (mode === "pro" && !prompt.trim()) {
+            setJdMessages(prev => ({
+                ...prev,
+                [jd.id]: { type: "error", text: "Pro mode requires prompt instructions" }
+            }));
+            return;
+        }
+
         setProcessingJdId(prev => new Set(prev).add(jd.id));
+        setJdMessages(prev => {
+            const next = { ...prev };
+            delete next[jd.id];
+            return next;
+        });
 
         const formData = new FormData();
         formData.append("resume", file);
         formData.append("jd", jd.description);
         formData.append("name", jd.companyRole.trim() || "Optimized_Resume");
         formData.append("prompt", prompt || "Highlight experience relevant to the job requirements.");
-        formData.append("provider", provider);
+        formData.append("provider", "openai");
         formData.append("model", model);
+        formData.append("mode", mode);
 
         try {
             const response = await fetch("/api/optimize-single", {
@@ -159,7 +185,6 @@ export function ResumeForm() {
                 throw new Error(errorData.error || 'Optimization failed');
             }
 
-            // Download DOCX directly
             const blob = await response.blob();
             const fileName = jd.companyRole.trim() || "Optimized_Resume";
             const url = window.URL.createObjectURL(blob);
@@ -171,11 +196,16 @@ export function ResumeForm() {
             window.URL.revokeObjectURL(url);
             document.body.removeChild(a);
 
-            setStatus("completed");
+            setJdMessages(prev => ({
+                ...prev,
+                [jd.id]: { type: "success", text: `✓ Downloaded ${fileName}.docx` }
+            }));
         } catch (error: any) {
             console.error(error);
-            setStatus("error");
-            alert(error.message || 'Error optimizing resume');
+            setJdMessages(prev => ({
+                ...prev,
+                [jd.id]: { type: "error", text: error.message || "Error optimizing resume" }
+            }));
         } finally {
             setProcessingJdId(prev => {
                 const newSet = new Set(prev);
@@ -185,60 +215,47 @@ export function ResumeForm() {
         }
     };
 
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-
-        // Validate: at least one JD with description
-        const validJDs = jobDescriptions.filter(jd => jd.description.trim());
-        if (!file || validJDs.length === 0) return;
-
-        setStatus("uploading");
-        setProcessingProgress({ current: 0, total: validJDs.length, currentName: "" });
-
-        const formData = new FormData();
-        formData.append("resume", file);
-
-        // Send JDs and names as JSON arrays
-        formData.append("jds", JSON.stringify(validJDs.map(jd => jd.description)));
-        formData.append("names", JSON.stringify(validJDs.map((jd, idx) =>
-            jd.companyRole.trim() || `Optimized_Resume_${idx + 1}`
-        )));
-
-        formData.append("prompt", prompt || "Highlight experience relevant to the job requirements.");
-        formData.append("provider", provider);
-        formData.append("model", model);
-
-        try {
-            setStatus("processing");
-            const response = await fetch("/api/optimize", {
-                method: "POST",
-                body: formData,
-            });
-
-            if (!response.ok) throw new Error('Optimization failed');
-
-            // Handle ZIP download
-            const blob = await response.blob();
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `batch_resumes_${Date.now()}.zip`;
-            document.body.appendChild(a);
-            a.click();
-            window.URL.revokeObjectURL(url);
-            document.body.removeChild(a);
-
-            setStatus("completed");
-        } catch (error) {
-            console.error(error);
-            setStatus("error");
-            alert('Error optimizing resume');
-        }
-    };
+    const isPro = mode === "pro";
 
     return (
         <div className="w-full max-w-2xl bg-card border border-border/50 rounded-xl shadow-2xl overflow-hidden backdrop-blur-sm">
             <div className="p-8 space-y-6">
+
+                {/* Mode Toggle */}
+                <div className="flex items-center justify-center gap-1 p-1 bg-secondary/30 rounded-lg border border-border/50">
+                    <button
+                        type="button"
+                        onClick={() => setMode("basic")}
+                        className={cn(
+                            "flex-1 py-2.5 px-4 rounded-md text-sm font-semibold transition-all duration-200",
+                            !isPro
+                                ? "bg-background text-foreground shadow-sm"
+                                : "text-muted-foreground hover:text-foreground"
+                        )}
+                    >
+                        Basic
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => setMode("pro")}
+                        className={cn(
+                            "flex-1 py-2.5 px-4 rounded-md text-sm font-semibold transition-all duration-200 flex items-center justify-center gap-2",
+                            isPro
+                                ? "bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-sm shadow-purple-500/25"
+                                : "text-muted-foreground hover:text-foreground"
+                        )}
+                    >
+                        <Crown className="w-4 h-4" />
+                        Pro
+                    </button>
+                </div>
+
+                {/* Pro Mode Description */}
+                {isPro && (
+                    <div className="text-xs text-muted-foreground bg-purple-500/5 border border-purple-500/20 rounded-lg px-4 py-3 animate-in fade-in slide-in-from-top-1">
+                        <span className="font-semibold text-purple-400">Pro Mode</span> — Your prompt is sent directly to ChatGPT with zero app modifications. You have full control over the instructions.
+                    </div>
+                )}
 
                 {/* File Upload */}
                 <div className="space-y-4">
@@ -266,7 +283,7 @@ export function ResumeForm() {
                                 <>
                                     <Upload className="h-10 w-10 text-muted-foreground" />
                                     <p className="font-medium text-muted-foreground">Drag & drop or click to upload</p>
-                                    <p className="text-xs text-muted-foreground">Supports .docx only</p>
+                                    <p className="text-xs text-muted-foreground">Supports .docx only (max 10MB)</p>
                                 </>
                             )}
                         </div>
@@ -301,7 +318,101 @@ export function ResumeForm() {
                     )}
                 </div>
 
-                {/* Job Descriptions (Batch) */}
+                {/* Prompt Instructions — changes based on mode */}
+                <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                        <label className="text-sm font-medium leading-none flex items-center gap-2">
+                            {isPro ? (
+                                <>
+                                    <span>Prompt Instructions</span>
+                                    <span className="text-[10px] font-bold uppercase tracking-wider bg-purple-500/20 text-purple-400 px-1.5 py-0.5 rounded">Required</span>
+                                </>
+                            ) : (
+                                "Custom Instructions (Optional)"
+                            )}
+                        </label>
+                        {!isSavingPrompt ? (
+                            <button
+                                onClick={() => setIsSavingPrompt(true)}
+                                type="button"
+                                disabled={!prompt}
+                                className="text-xs text-primary hover:underline font-medium disabled:opacity-50 disabled:no-underline flex items-center gap-1"
+                            >
+                                <Save className="w-3 h-3" />
+                                Save to Favorites
+                            </button>
+                        ) : (
+                            <div className="flex items-center gap-2 animate-in fade-in slide-in-from-right-2">
+                                <input
+                                    autoFocus
+                                    className="h-6 w-32 rounded border border-input bg-background px-2 text-xs"
+                                    placeholder="Name (e.g. Sales)"
+                                    value={newPromptName}
+                                    onChange={(e) => setNewPromptName(e.target.value)}
+                                />
+                                <button
+                                    onClick={savePrompt}
+                                    type="button"
+                                    disabled={!newPromptName}
+                                    className="text-xs bg-primary text-primary-foreground px-2 py-1 rounded hover:opacity-90 disabled:opacity-50"
+                                >
+                                    Save
+                                </button>
+                                <button
+                                    onClick={() => setIsSavingPrompt(false)}
+                                    type="button"
+                                    className="text-xs text-muted-foreground hover:text-foreground"
+                                >
+                                    Cancel
+                                </button>
+                            </div>
+                        )}
+                    </div>
+
+                    {isPro ? (
+                        <textarea
+                            className={cn(
+                                "flex min-h-[140px] w-full rounded-md border bg-background/50 px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-y",
+                                isPro ? "border-purple-500/30" : "border-input"
+                            )}
+                            placeholder="Enter your full prompt instructions for ChatGPT. Your prompt will be sent directly — the app adds no modifications.&#10;&#10;Example: You are a resume expert. Rewrite the professional summary and experience bullet points to align with the given JD..."
+                            value={prompt}
+                            onChange={(e) => setPrompt(e.target.value)}
+                        />
+                    ) : (
+                        <input
+                            className="flex h-10 w-full rounded-md border border-input bg-background/50 px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                            placeholder="e.g. Focus on leadership skills..."
+                            value={prompt}
+                            onChange={(e) => setPrompt(e.target.value)}
+                        />
+                    )}
+
+                    {/* Saved Prompts Chips */}
+                    {savedPrompts.length > 0 && (
+                        <div className="flex flex-wrap gap-2 pt-1">
+                            {savedPrompts.map((p, idx) => (
+                                <div
+                                    key={idx}
+                                    onClick={() => setPrompt(p.content)}
+                                    title={p.content}
+                                    className="group flex items-center gap-2 bg-secondary/50 hover:bg-secondary text-secondary-foreground px-3 py-1.5 rounded-full text-xs cursor-pointer transition-colors max-w-full border border-transparent hover:border-primary/20"
+                                >
+                                    <Sparkles className="w-3 h-3 text-primary" />
+                                    <span className="font-medium truncate max-w-[150px]">{p.name}</span>
+                                    <button
+                                        onClick={(e) => deletePrompt(idx, e)}
+                                        className="opacity-0 group-hover:opacity-100 hover:text-destructive transition-opacity"
+                                    >
+                                        ×
+                                    </button>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+
+                {/* Job Descriptions */}
                 <div className="space-y-4">
                     <div className="flex items-center justify-between">
                         <label className="text-sm font-medium leading-none">
@@ -360,99 +471,43 @@ export function ResumeForm() {
                                 disabled={!file || !jd.description.trim() || processingJdId.has(jd.id)}
                                 className={cn(
                                     "w-full h-10 rounded-md font-medium text-sm flex items-center justify-center gap-2 transition-all",
-                                    "bg-primary/10 text-primary hover:bg-primary/20 border border-primary/30",
+                                    isPro
+                                        ? "bg-gradient-to-r from-purple-600/20 to-indigo-600/20 text-purple-300 hover:from-purple-600/30 hover:to-indigo-600/30 border border-purple-500/30"
+                                        : "bg-primary/10 text-primary hover:bg-primary/20 border border-primary/30",
                                     "disabled:opacity-50 disabled:cursor-not-allowed"
                                 )}
                             >
                                 {processingJdId.has(jd.id) ? (
                                     <>
                                         <Loader2 className="h-4 w-4 animate-spin" />
-                                        Optimizing...
+                                        Optimizing{isPro ? " (Pro)" : ""}...
                                     </>
                                 ) : (
                                     <>
-                                        <Sparkles className="h-4 w-4" />
-                                        Optimize for this JD
+                                        {isPro ? <Crown className="h-4 w-4" /> : <Sparkles className="h-4 w-4" />}
+                                        Optimize for this JD{isPro ? " (Pro)" : ""}
                                     </>
                                 )}
                             </button>
+
+                            {/* Inline Status Message */}
+                            {jdMessages[jd.id] && (
+                                <div className={cn(
+                                    "flex items-center gap-2 text-sm px-3 py-2 rounded-md animate-in fade-in slide-in-from-top-1",
+                                    jdMessages[jd.id].type === "success"
+                                        ? "bg-green-500/10 text-green-400 border border-green-500/20"
+                                        : "bg-destructive/10 text-red-400 border border-destructive/20"
+                                )}>
+                                    {jdMessages[jd.id].type === "success" ? (
+                                        <CheckCircle2 className="h-4 w-4 shrink-0" />
+                                    ) : (
+                                        <AlertCircle className="h-4 w-4 shrink-0" />
+                                    )}
+                                    <span className="truncate">{jdMessages[jd.id].text}</span>
+                                </div>
+                            )}
                         </div>
                     ))}
-                </div>
-
-                {/* Custom Prompt */}
-                <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                        <label className="text-sm font-medium leading-none">
-                            Custom Instructions (Optional)
-                        </label>
-                        {!isSavingPrompt ? (
-                            <button
-                                onClick={() => setIsSavingPrompt(true)}
-                                type="button"
-                                disabled={!prompt}
-                                className="text-xs text-primary hover:underline font-medium disabled:opacity-50 disabled:no-underline flex items-center gap-1"
-                            >
-                                <Save className="w-3 h-3" />
-                                Save to Favorites
-                            </button>
-                        ) : (
-                            <div className="flex items-center gap-2 animate-in fade-in slide-in-from-right-2">
-                                <input
-                                    autoFocus
-                                    className="h-6 w-32 rounded border border-input bg-background px-2 text-xs"
-                                    placeholder="Name (e.g. Sales)"
-                                    value={newPromptName}
-                                    onChange={(e) => setNewPromptName(e.target.value)}
-                                />
-                                <button
-                                    onClick={savePrompt}
-                                    type="button"
-                                    disabled={!newPromptName}
-                                    className="text-xs bg-primary text-primary-foreground px-2 py-1 rounded hover:opacity-90 disabled:opacity-50"
-                                >
-                                    Save
-                                </button>
-                                <button
-                                    onClick={() => setIsSavingPrompt(false)}
-                                    type="button"
-                                    className="text-xs text-muted-foreground hover:text-foreground"
-                                >
-                                    Cancel
-                                </button>
-                            </div>
-                        )}
-                    </div>
-
-                    <input
-                        className="flex h-10 w-full rounded-md border border-input bg-background/50 px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
-                        placeholder="e.g. Focus on leadership skills..."
-                        value={prompt}
-                        onChange={(e) => setPrompt(e.target.value)}
-                    />
-
-                    {/* Saved Prompts Chips */}
-                    {savedPrompts.length > 0 && (
-                        <div className="flex flex-wrap gap-2 pt-1">
-                            {savedPrompts.map((p, idx) => (
-                                <div
-                                    key={idx}
-                                    onClick={() => setPrompt(p.content)}
-                                    title={p.content}
-                                    className="group flex items-center gap-2 bg-secondary/50 hover:bg-secondary text-secondary-foreground px-3 py-1.5 rounded-full text-xs cursor-pointer transition-colors max-w-full border border-transparent hover:border-primary/20"
-                                >
-                                    <Sparkles className="w-3 h-3 text-primary" />
-                                    <span className="font-medium truncate max-w-[150px]">{p.name}</span>
-                                    <button
-                                        onClick={(e) => deletePrompt(idx, e)}
-                                        className="opacity-0 group-hover:opacity-100 hover:text-destructive transition-opacity"
-                                    >
-                                        ×
-                                    </button>
-                                </div>
-                            ))}
-                        </div>
-                    )}
                 </div>
 
                 {/* AI Model Selection */}
@@ -476,8 +531,6 @@ export function ResumeForm() {
                         </optgroup>
                     </select>
                 </div>
-
-
 
             </div>
         </div>
