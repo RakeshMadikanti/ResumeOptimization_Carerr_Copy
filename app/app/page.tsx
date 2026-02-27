@@ -23,7 +23,7 @@ export default function AppPage() {
                 </div>
             </div>
 
-            <div className="w-full max-w-3xl z-10">
+            <div className="w-full max-w-6xl z-10">
                 <div className="text-center mb-10 space-y-2">
                     <h2 className="text-3xl font-extrabold tracking-tight lg:text-4xl">
                         Optimize Your Resume
