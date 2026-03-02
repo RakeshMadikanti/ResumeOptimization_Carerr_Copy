@@ -1,57 +1,57 @@
-# steps:
-#   # Build the Docker image with Clerk key as build argument
-#   - name: 'gcr.io/cloud-builders/docker'
-#     args:
-#       - 'build'
-#       - '--build-arg'
-#       - 'NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=${_CLERK_PUBLISHABLE_KEY}'
-#       - '-t'
-#       - 'us-central1-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/autoresume:$COMMIT_SHA'
-#       - '-t'
-#       - 'us-central1-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/autoresume:latest'
-#       - '.'
+steps:
+  # Build the Docker image with Clerk key as build argument
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '--build-arg'
+      - 'NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=${_CLERK_PUBLISHABLE_KEY}'
+      - '-t'
+      - 'us-central1-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/autoresume:$COMMIT_SHA'
+      - '-t'
+      - 'us-central1-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/autoresume:latest'
+      - '.'
 
-#   # Push images
-#   - name: 'gcr.io/cloud-builders/docker'
-#     args: ['push', 'us-central1-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/autoresume:$COMMIT_SHA']
+  # Push images
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', 'us-central1-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/autoresume:$COMMIT_SHA']
 
-#   - name: 'gcr.io/cloud-builders/docker'
-#     args: ['push', 'us-central1-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/autoresume:latest']
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', 'us-central1-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/autoresume:latest']
 
-#   # Deploy to Cloud Run
-#   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
-#     entrypoint: gcloud
-#     args:
-#       - 'run'
-#       - 'deploy'
-#       - 'autoresume'
-#       - '--image'
-#       - 'us-central1-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/autoresume:$COMMIT_SHA'
-#       - '--region'
-#       - 'us-central1'
-#       - '--platform'
-#       - 'managed'
-#       - '--allow-unauthenticated'
-#       - '--memory'
-#       - '1Gi'
-#       - '--cpu'
-#       - '1'
-#       - '--timeout'
-#       - '300s'
-#       - '--set-env-vars'
-#       - 'NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=${_CLERK_PUBLISHABLE_KEY},CLERK_SECRET_KEY=${_CLERK_SECRET_KEY},OPENAI_API_KEY=${_OPENAI_API_KEY}'
+  # Deploy to Cloud Run
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: gcloud
+    args:
+      - 'run'
+      - 'deploy'
+      - 'autoresume'
+      - '--image'
+      - 'us-central1-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/autoresume:$COMMIT_SHA'
+      - '--region'
+      - 'us-central1'
+      - '--platform'
+      - 'managed'
+      - '--allow-unauthenticated'
+      - '--memory'
+      - '1Gi'
+      - '--cpu'
+      - '1'
+      - '--timeout'
+      - '300s'
+      - '--set-env-vars'
+      - 'NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=${_CLERK_PUBLISHABLE_KEY},CLERK_SECRET_KEY=${_CLERK_SECRET_KEY},OPENAI_API_KEY=${_OPENAI_API_KEY}'
 
-# # Substitution variables - set these in Cloud Build trigger settings
-# substitutions:
-#   _CLERK_PUBLISHABLE_KEY: ''
-#   _CLERK_SECRET_KEY: ''
-#   _OPENAI_API_KEY: ''
+# Substitution variables - set these in Cloud Build trigger settings
+substitutions:
+  _CLERK_PUBLISHABLE_KEY: ''
+  _CLERK_SECRET_KEY: ''
+  _OPENAI_API_KEY: ''
 
-# images:
-#   - 'us-central1-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/autoresume:$COMMIT_SHA'
-#   - 'us-central1-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/autoresume:latest'
+images:
+  - 'us-central1-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/autoresume:$COMMIT_SHA'
+  - 'us-central1-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/autoresume:latest'
 
-# timeout: '600s'
+timeout: '600s'
 
-# options:
-#   logging: CLOUD_LOGGING_ONLY
+options:
+  logging: CLOUD_LOGGING_ONLY
