@@ -520,7 +520,7 @@ export function ResumeForm() {
 
             {/* Resume Builder Form Container */}
             <div className="w-full flex-1 min-w-0 max-w-3xl bg-card border border-border/50 rounded-xl shadow-2xl overflow-hidden backdrop-blur-sm self-start">
-                <div className="p-6 lg:p-8 space-y-5">
+                <div className="p-4 lg:p-5 space-y-4">
 
                     {/* File Upload */}
                     <div className="space-y-4">
@@ -528,7 +528,7 @@ export function ResumeForm() {
                             Upload Original Resume (DOCX)
                         </label>
                         <div className={cn(
-                            "border-2 border-dashed border-muted-foreground/25 rounded-lg p-5 lg:p-6 text-center hover:bg-muted/50 transition cursor-pointer relative",
+                            "border-2 border-dashed border-muted-foreground/25 rounded-lg p-3 lg:p-4 text-center hover:bg-muted/50 transition cursor-pointer relative",
                             file && "border-primary/50 bg-primary/5"
                         )}>
                             <input
@@ -540,13 +540,13 @@ export function ResumeForm() {
                             <div className="flex flex-col items-center gap-2">
                                 {file ? (
                                     <>
-                                        <FileText className="h-10 w-10 text-primary" />
+                                        <FileText className="h-8 w-8 text-primary" />
                                         <p className="font-medium text-foreground">{file?.name}</p>
                                         <p className="text-xs text-muted-foreground">{((file?.size || 0) / 1024).toFixed(2)} KB</p>
                                     </>
                                 ) : (
                                     <>
-                                        <Upload className="h-10 w-10 text-muted-foreground" />
+                                        <Upload className="h-8 w-8 text-muted-foreground" />
                                         <p className="font-medium text-muted-foreground">Drag & drop or click to upload</p>
                                         <p className="text-xs text-muted-foreground">Supports .docx only (max 10MB)</p>
                                     </>
@@ -631,7 +631,7 @@ export function ResumeForm() {
                         </div>
 
                         <textarea
-                            className="flex min-h-[140px] w-full rounded-md border bg-background/50 px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-y border-purple-500/30"
+                            className="flex min-h-[80px] w-full rounded-md border bg-background/50 px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-y border-purple-500/30"
                             placeholder="Enter your full prompt instructions for ChatGPT. Your prompt will be sent directly — the app adds no modifications.&#10;&#10;Example: You are a resume expert. Rewrite the professional summary and experience bullet points to align with the given JD..."
                             value={prompt}
                             onChange={(e) => setPrompt(e.target.value)}
@@ -663,7 +663,7 @@ export function ResumeForm() {
                     </div>
 
                     {/* Job Descriptions */}
-                    <div className="space-y-4">
+                    <div className="space-y-3">
                         <div className="flex items-center justify-between">
                             <label className="text-sm font-medium leading-none">
                                 Job Descriptions ({jobDescriptions.length}/3)
@@ -680,7 +680,7 @@ export function ResumeForm() {
                         </div>
 
                         {jobDescriptions.map((jd, index) => (
-                            <div key={jd.id} className="space-y-2 p-4 border border-border/50 rounded-lg bg-secondary/10">
+                            <div key={jd.id} className="space-y-2 p-3 border border-border/50 rounded-lg bg-secondary/10">
                                 <div className="flex items-center justify-between mb-2">
                                     <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                                         JD #{index + 1}
@@ -701,14 +701,14 @@ export function ResumeForm() {
                                 </div>
 
                                 <input
-                                    className="flex h-10 w-full rounded-md border border-input bg-background/50 px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                    className="flex h-9 w-full rounded-md border border-input bg-background/50 px-3 py-1.5 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                                     placeholder="Company/Role (e.g., Google_SWE, Meta_Backend)"
                                     value={jd.companyRole}
                                     onChange={(e) => updateJobDescription(jd.id, "companyRole", e.target.value)}
                                 />
 
                                 <textarea
-                                    className="flex min-h-[120px] w-full rounded-md border border-input bg-background/50 px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-y"
+                                    className="flex min-h-[80px] w-full rounded-md border border-input bg-background/50 px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-y"
                                     placeholder="Paste the job description here..."
                                     value={jd.description}
                                     onChange={(e) => updateJobDescription(jd.id, "description", e.target.value)}
@@ -720,7 +720,7 @@ export function ResumeForm() {
                                     onClick={() => handleOptimizeSingle(jd)}
                                     disabled={!file || !jd.description.trim() || processingJdId.has(jd.id)}
                                     className={cn(
-                                        "w-full h-10 rounded-md font-medium text-sm flex items-center justify-center gap-2 transition-all bg-gradient-to-r from-purple-600/20 to-indigo-600/20 text-purple-300 hover:from-purple-600/30 hover:to-indigo-600/30 border border-purple-500/30",
+                                        "w-full h-9 rounded-md font-medium text-sm flex items-center justify-center gap-2 transition-all bg-gradient-to-r from-purple-600/20 to-indigo-600/20 text-purple-300 hover:from-purple-600/30 hover:to-indigo-600/30 border border-purple-500/30",
                                         "disabled:opacity-50 disabled:cursor-not-allowed"
                                     )}
                                 >
