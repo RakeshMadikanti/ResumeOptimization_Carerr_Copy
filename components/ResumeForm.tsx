@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Upload, FileText, Sparkles, Loader2, Trash2, Save, AlertCircle, CheckCircle2, Crown, Folder, User, ChevronDown, ChevronRight, Plus, PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { Upload, FileText, Sparkles, Loader2, Trash2, Save, AlertCircle, CheckCircle2, Crown, Folder, User, ChevronDown, ChevronRight, Plus, PanelLeftClose, PanelLeftOpen, LayoutList, Briefcase, Scale, Award } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { saveResumeToDB, getResumesFromDB, deleteResumeFromDB, SavedResume } from "@/lib/db";
@@ -36,7 +36,8 @@ export function ResumeForm() {
     const [isSavingPrompt, setIsSavingPrompt] = useState(false);
     const [newPromptName, setNewPromptName] = useState("");
 
-    const [model, setModel] = useState("gpt-5.2");
+    // Model is fixed to "gpt-5.2"; UI selection removed
+    const [template, setTemplate] = useState("standard");
     const [processingJdId, setProcessingJdId] = useState<Set<string>>(new Set());
 
     // Per-JD status messages (success or error)
@@ -283,8 +284,9 @@ export function ResumeForm() {
         formData.append("name", jd.companyRole.trim() || "Optimized_Resume");
         formData.append("prompt", prompt || "Highlight experience relevant to the job requirements.");
         formData.append("provider", "openai");
-        formData.append("model", model);
+        formData.append("model", "gpt-5.2");
         formData.append("mode", "pro");
+        formData.append("template", template);
 
         try {
             const response = await fetch("/api/optimize-single", {
@@ -757,26 +759,38 @@ export function ResumeForm() {
                         ))}
                     </div>
 
-                    {/* AI Model Selection */}
-                    <div className="space-y-2">
-                        <label className="text-sm font-medium leading-none">AI Model</label>
-                        <select
-                            value={model}
-                            onChange={(e) => setModel(e.target.value)}
-                            className="flex h-10 w-full rounded-md border border-input bg-background/50 px-3 py-2 text-sm focus-visible:ring-2 focus-visible:ring-ring"
-                        >
-                            <optgroup label="🔥 GPT-5 Family (Latest)">
-                                <option value="gpt-5.2">GPT-5.2 (Most Powerful)</option>
-                                <option value="gpt-5.2-pro">GPT-5.2 Pro (Premium)</option>
-                                <option value="gpt-5-mini">GPT-5 Mini (Fast)</option>
-                                <option value="gpt-5-nano">GPT-5 Nano (Fastest)</option>
-                            </optgroup>
-                            <optgroup label="⚡ GPT-4.1 Family">
-                                <option value="gpt-4.1">GPT-4.1 (Balanced)</option>
-                                <option value="gpt-4.1-mini">GPT-4.1 Mini (Fast)</option>
-                                <option value="gpt-4.1-nano">GPT-4.1 Nano (Budget)</option>
-                            </optgroup>
-                        </select>
+                    {/* Resume Format Template Selector */}
+                    <div className="space-y-3">
+                        <label className="text-sm font-medium leading-none flex items-center gap-2">
+                            <span>Resume Layout</span>
+                            <span className="text-[10px] font-bold uppercase tracking-wider bg-blue-500/20 text-blue-400 px-1.5 py-0.5 rounded">Format</span>
+                        </label>
+                        <div className="grid grid-cols-2 gap-2">
+                            {[
+                                { id: "standard", label: "Standard", desc: "Summary → Skills → Experience → Education", Icon: LayoutList },
+                                { id: "experience-led", label: "Experience-Led", desc: "Summary → Experience → Skills → Education", Icon: Briefcase },
+                                { id: "balanced", label: "Balanced", desc: "Summary → Experience → Education → Skills", Icon: Scale },
+                                { id: "executive", label: "Executive", desc: "Summary → Skills → Education → Experience", Icon: Award },
+                            ].map((t) => (
+                                <button
+                                    key={t.id}
+                                    type="button"
+                                    onClick={() => setTemplate(t.id)}
+                                    className={cn(
+                                        "flex flex-col items-start gap-1.5 p-3 rounded-lg border text-left transition-all",
+                                        template === t.id
+                                            ? "border-primary bg-primary/10 ring-1 ring-primary/30 shadow-sm"
+                                            : "border-border/50 bg-background hover:bg-secondary/30 hover:border-border"
+                                    )}
+                                >
+                                    <div className="flex items-center gap-2">
+                                        <t.Icon className={cn("w-4 h-4", template === t.id ? "text-primary" : "text-muted-foreground")} />
+                                        <span className={cn("text-sm font-medium", template === t.id ? "text-foreground" : "text-foreground/80")}>{t.label}</span>
+                                    </div>
+                                    <span className="text-[11px] text-muted-foreground leading-tight">{t.desc}</span>
+                                </button>
+                            ))}
+                        </div>
                     </div>
 
                 </div>

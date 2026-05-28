@@ -21,6 +21,11 @@ const ALLOWED_MODELS = new Set([
     "gpt-4.1", "gpt-4.1-mini", "gpt-4.1-nano",
 ]);
 
+// Allowlisted templates — must match scripts/templates.json
+const ALLOWED_TEMPLATES = new Set([
+    "standard", "experience-led", "balanced", "executive",
+]);
+
 export async function POST(req: NextRequest) {
     try {
         const formData = await req.formData();
@@ -31,6 +36,7 @@ export async function POST(req: NextRequest) {
 
         const model = formData.get("model") as string;
         const mode = formData.get("mode") as string || "basic";
+        const template = formData.get("template") as string || "standard";
 
         // Validate model against allowlist
         if (!model || !ALLOWED_MODELS.has(model)) {
@@ -40,6 +46,11 @@ export async function POST(req: NextRequest) {
         // Validate mode
         if (!['basic', 'pro'].includes(mode)) {
             return NextResponse.json({ error: "Invalid mode" }, { status: 400 });
+        }
+
+        // Validate template
+        if (!ALLOWED_TEMPLATES.has(template)) {
+            return NextResponse.json({ error: "Invalid template selected" }, { status: 400 });
         }
 
         // Check for OpenAI API Key
@@ -93,7 +104,33 @@ export async function POST(req: NextRequest) {
             const result = JSON.parse(stdout);
 
             if (result.status === "success") {
-                const fileBuffer = await readFile(outputPath);
+                // Post-process: rearrange sections if non-standard template
+                let finalOutputPath = outputPath;
+                if (template !== "standard") {
+                    const rearrangedPath = join(tempDir, `rearranged_${Date.now()}.docx`);
+                    const rearrangeScript = join(process.cwd(), "scripts", "rearrange.py");
+                    tempFiles.push(rearrangedPath);
+
+                    console.log(`[AutoResume] Rearranging sections with template: ${template}`);
+                    const rearrangeCmd = `${pythonCmd} "${rearrangeScript}" "${outputPath}" "${rearrangedPath}" "${template}"`;
+                    const rearrangeResult = await execAsync(rearrangeCmd, {
+                        timeout: 15000, // 15 second timeout (no AI, pure doc manipulation)
+                    });
+
+                    if (rearrangeResult.stderr) {
+                        console.error("Rearrange stderr:", rearrangeResult.stderr);
+                    }
+
+                    const rearrangeJson = JSON.parse(rearrangeResult.stdout);
+                    if (rearrangeJson.status === "success") {
+                        finalOutputPath = rearrangedPath;
+                        console.log(`[AutoResume] Sections reordered: ${rearrangeJson.reordered_to.join(' → ')}`);
+                    } else {
+                        console.error("Rearrange failed, using original output:", rearrangeJson.message);
+                    }
+                }
+
+                const fileBuffer = await readFile(finalOutputPath);
                 const fileName = name?.trim() || "Optimized_Resume";
 
                 // Cleanup temp files

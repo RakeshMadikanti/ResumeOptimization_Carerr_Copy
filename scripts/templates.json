@@ -1,0 +1,25 @@
+{
+  "templates": {
+    "standard": {
+      "label": "Standard",
+      "description": "Skills before Experience",
+      "order": ["header", "summary", "skills", "experience", "education"]
+    },
+    "experience-led": {
+      "label": "Experience-Led",
+      "description": "Experience before Skills",
+      "order": ["header", "summary", "experience", "skills", "education"]
+    },
+    "balanced": {
+      "label": "Balanced",
+      "description": "Experience, Education, then Skills",
+      "order": ["header", "summary", "experience", "education", "skills"]
+    },
+    "executive": {
+      "label": "Executive",
+      "description": "Skills, Education, then Experience",
+      "order": ["header", "summary", "skills", "education", "experience"]
+    }
+  },
+  "default": "standard"
+}
