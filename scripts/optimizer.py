@@ -5,6 +5,9 @@ import re
 from openai import OpenAI
 from docx import Document
 
+# Import rules engine from same directory
+import rules_engine
+
 def prune_job_description(raw_jd: str) -> str:
     """
     Remove boilerplate sections (benefits, EEO, company descriptions)
@@ -191,14 +194,70 @@ def replace_paragraph_text(para, new_text):
         if has_markdown_bold:
             new_run.bold = is_bold
 
+def run_stage1_planner(jd_text, resume_text, model):
+    system_prompt = """You are a senior resume strategist and ATS optimization planner.
+Your job is to analyze the target Job Description (JD) and the numbered Resume to create a strict execution plan for tailoring the resume.
+
+You must output a raw JSON object in the following format:
+{
+    "detected_seniority": "Junior | Mid-Level | Senior | Executive",
+    "candidate_domain": "One of: Retail, Healthcare, Finance, Logistics, HRIS, Data Engineering, or Other",
+    "jd_domain": "One of: Retail, Healthcare, Finance, Logistics, HRIS, Data Engineering, or Other",
+    "client_1_index": 1-based paragraph index of Client 1 (earlier role) title line,
+    "client_1_original_title": "the exact text of Client 1 title paragraph",
+    "client_1_proposed_title": "Proposed Client 1 Title Line", // MUST preserve original company and dates exactly, evolving only the job title part to a foundational/transitional title
+    "client_2_index": 1-based paragraph index of Client 2 (recent role) title line,
+    "client_2_original_title": "the exact text of Client 2 title paragraph",
+    "client_2_proposed_title": "Proposed Client 2 Title Line", // MUST preserve original company and dates exactly, evolving only the job title part to align with JD target role
+    "tool_substitutions": {
+        "Manhattan OMS": "Epic" // Map any domain-specific tool in the JD that doesn't match candidate's domain to its functional equivalent
+    },
+    "keyword_distribution": {
+        "summary": ["key term 1", "key term 2"],
+        "skills": ["key term 3", "key term 4"],
+        "experience": ["key term 5", "key term 6"]
+    }
+}
+
+CRITICAL RULES FOR PROPOSED TITLES:
+1. You MUST preserve the company names and dates/tenures (e.g., '2020 - 2022', '2022 - Present') from the original paragraph text exactly.
+2. Only modify the job title portion within that paragraph to match the career trajectory.
+3. Client 1 (earlier role) MUST represent a foundational, entry-level, or transitional title.
+4. Client 2 (recent role) MUST represent a specialized title directly aligned to the target JD title.
+"""
+    user_prompt = f"""Job Description:
+{jd_text}
+
+Resume (numbered):
+{resume_text}
+"""
+    ai_provider = OpenAIProvider()
+    response_text = ai_provider.generate(system_prompt, user_prompt, model)
+    
+    # Clean response
+    response_text = response_text.replace("```json", "").replace("```", "").strip()
+    
+    try:
+        plan = json.loads(response_text)
+    except json.JSONDecodeError:
+        start = response_text.find('{')
+        end = response_text.rfind('}') + 1
+        if start != -1 and end != -1:
+            plan = json.loads(response_text[start:end])
+        else:
+            plan = {}
+            
+    return plan
+
 def optimize_pro(input_path, output_path, jd_text, prompt_instruction, model_name):
     """
-    PRO MODE: Positional replacement.
+    PRO MODE: Positional replacement with Two-Stage Pipeline.
     
     1. Number each non-empty paragraph [1], [2], [3]...
-    2. Send user's prompt verbatim + numbered resume + JD to ChatGPT
-    3. ChatGPT returns {"replacements": [{"index": 1, "new": "..."}]}
-    4. Replace paragraph at index N with new text. No matching. No thresholds.
+    2. Run Stage 1 Planner to generate a structured execution plan.
+    3. Update job titles and substitute tools based on the plan.
+    4. Enforce date-locking and seniority calibrations in the rewrite prompt.
+    5. Call Stage 2 LLM rewrite and apply replacements with Python-level safety gates.
     """
     try:
         doc = Document(input_path)
@@ -237,7 +296,7 @@ def optimize_pro(input_path, output_path, jd_text, prompt_instruction, model_nam
                 current_section = detected
             para_sections.append(current_section)
         
-        # Build numbered resume content for ChatGPT using markdown for bolding
+        # Build initial numbered resume content for Stage 1 Planner
         numbered_lines = []
         excluded_count = 0
         for i, para in enumerate(indexed_paragraphs):
@@ -250,11 +309,96 @@ def optimize_pro(input_path, output_path, jd_text, prompt_instruction, model_nam
             para_md = get_para_markdown(para)
             numbered_lines.append(f"[{i + 1}] {para_md}")
         
-        print(f"# Sectional Diff: Excluded {excluded_count} static paragraphs (header/education) from LLM prompt", file=sys.stderr)
         numbered_resume = "\n".join(numbered_lines)
         
-        # System prompt: user's prompt + output format
+        # ─── STAGE 1: PLANNER ──────────────────────────────────────────────
+        print(f"# Stage 1 Planner: Running analysis...", file=sys.stderr)
+        plan = run_stage1_planner(jd_text, numbered_resume, model_name)
+        
+        candidate_domain = plan.get("candidate_domain", "Other")
+        jd_domain = plan.get("jd_domain", "Other")
+        seniority = plan.get("detected_seniority", "Mid-Level")
+        
+        print(f"# Stage 1 Planner Output: Seniority={seniority}, Candidate Domain={candidate_domain}, JD Domain={jd_domain}", file=sys.stderr)
+        
+        # Load rules engine tool mappings
+        tool_map = rules_engine.get_tool_mappings(candidate_domain, jd_domain)
+        
+        # Merge with plan-level substitutions
+        stage1_subs = plan.get("tool_substitutions", {})
+        if isinstance(stage1_subs, dict):
+            tool_map.update(stage1_subs)
+            
+        print(f"# Resolved Tool Mappings: {tool_map}", file=sys.stderr)
+        
+        # Perform tool substitutions in JD and resume before the rewrite
+        if tool_map:
+            for jd_tool, cand_tool in tool_map.items():
+                pattern = re.compile(re.escape(jd_tool), re.IGNORECASE)
+                jd_text = pattern.sub(cand_tool, jd_text)
+                numbered_resume = pattern.sub(cand_tool, numbered_resume)
+        
+        # Update client title paragraphs directly before the rewrite
+        client_1_idx = plan.get("client_1_index")
+        client_2_idx = plan.get("client_2_index")
+        client_1_updated = False
+        client_2_updated = False
+        
+        if client_1_idx:
+            try:
+                pos1 = int(client_1_idx) - 1
+                if 0 <= pos1 < len(indexed_paragraphs):
+                    new_title = plan.get("client_1_proposed_title")
+                    if new_title:
+                        replace_paragraph_text(indexed_paragraphs[pos1], new_title)
+                        client_1_updated = True
+                        print(f"# Pre-rewrite: Client 1 Title updated to '{new_title}'", file=sys.stderr)
+            except Exception as e:
+                print(f"# Error updating Client 1 title paragraph: {e}", file=sys.stderr)
+                
+        if client_2_idx:
+            try:
+                pos2 = int(client_2_idx) - 1
+                if 0 <= pos2 < len(indexed_paragraphs):
+                    new_title = plan.get("client_2_proposed_title")
+                    if new_title:
+                        replace_paragraph_text(indexed_paragraphs[pos2], new_title)
+                        client_2_updated = True
+                        print(f"# Pre-rewrite: Client 2 Title updated to '{new_title}'", file=sys.stderr)
+            except Exception as e:
+                print(f"# Error updating Client 2 title paragraph: {e}", file=sys.stderr)
+        
+        # Re-build numbered resume because we just modified title paragraphs directly
+        numbered_lines = []
+        for i, para in enumerate(indexed_paragraphs):
+            section = para_sections[i]
+            if section in ["header", "education"]:
+                continue
+            para_md = get_para_markdown(para)
+            numbered_lines.append(f"[{i + 1}] {para_md}")
+        
+        numbered_resume = "\n".join(numbered_lines)
+        
+        # Get seniority-calibrated verbs and forbidden phrases
+        calibration = rules_engine.get_calibrated_prompts(seniority)
+        allowed_verbs = ", ".join(calibration["allowed_verbs"])
+        forbidden_phrases = ", ".join(calibration["forbidden_phrases"])
+        
+        # ─── STAGE 2: REWRITE ──────────────────────────────────────────────
         system_prompt = f"""{prompt_instruction}
+
+**CRITICAL COMPLIANCE RULES (STRICT CONSTRAINTS)**:
+1. **NEVER** alter, remove, or rewrite any date, year, or date range in the resume paragraphs under any circumstances.
+2. The Client 1 title (paragraph at index {client_1_idx}) has already been set to '{plan.get("client_1_proposed_title")}'. Do NOT change this paragraph.
+3. The Client 2 title (paragraph at index {client_2_idx}) has already been set to '{plan.get("client_2_proposed_title")}'. Do NOT change this paragraph.
+4. **Client 1 Experience Bullets** must emphasize: reporting, operational support, data analysis, coordination, and foundational system usage.
+5. **Client 2 Experience Bullets** must emphasize: ownership, optimization, cross-functional collaboration, advanced configuration, and process improvements.
+6. **Do NOT copy any tool from the JD directly** if it does not match the candidate's domain ({candidate_domain}). Only use the functional substitutions: {json.dumps(tool_map)}.
+7. **ATS Keyword stuffing prevention**: Do NOT repeat the same keyword or skill more than twice across the entire resume.
+8. **Seniority Calibration ({seniority} Level)**:
+   - YOU MUST USE allowed verbs/themes: {allowed_verbs}
+   - YOU ARE STRICTLY FORBIDDEN from using any of the following terms or themes: {forbidden_phrases}
+9. All responsibilities must be realistic, explainable, and logically defensible in a real interview. No exaggerated claims.
 
 **CRITICAL OUTPUT FORMAT (MUST follow exactly)**:
 The resume content below is numbered with [1], [2], [3], etc.
@@ -267,7 +411,8 @@ Return ONLY a raw JSON object in this exact format:
     ]
 }}
 Only include indexes for points you are changing. Do NOT include the [N] prefix in the "new" text.
-You MAY use **bold** markdown (like **Role Title**) in the "new" text. The system will convert your asterisks into actual Microsoft Word Document bolding.
+Do NOT include replacements for the client title paragraphs (paragraphs {client_1_idx} and {client_2_idx}) or date paragraphs, since they are locked.
+You MAY use **bold** markdown (like **Role Title**) in the "new" text.
 """
         
         user_prompt = f"""Job Description:
@@ -277,6 +422,7 @@ Resume Content (numbered):
 {numbered_resume}
 """
         
+        print(f"# Stage 2 Rewrite: Calling OpenAI...", file=sys.stderr)
         ai_client = OpenAIProvider()
         response_text = ai_client.generate(system_prompt, user_prompt, model_name)
         
@@ -298,6 +444,9 @@ Resume Content (numbered):
         changes_count = 0
         skipped_count = 0
         
+        # Date-locking protection regex
+        date_pattern = re.compile(r'\b(?:19|20)\d{2}\b|\bPresent\b', re.IGNORECASE)
+        
         for replacement in replacements:
             idx = replacement.get("index")
             new_text = replacement.get("new", "")
@@ -317,6 +466,18 @@ Resume Content (numbered):
             
             target_para = indexed_paragraphs[pos]
             old_text = target_para.text.strip()
+            
+            # 1. Date locking check
+            if date_pattern.search(old_text):
+                print(f"# BLOCKED: Attempted to edit date-locked paragraph [{idx}]: '{old_text}'", file=sys.stderr)
+                skipped_count += 1
+                continue
+                
+            # 2. Title locking check
+            if (client_1_updated and pos == int(client_1_idx) - 1) or (client_2_updated and pos == int(client_2_idx) - 1):
+                print(f"# BLOCKED: Attempted to edit title-locked paragraph [{idx}]: '{old_text}'", file=sys.stderr)
+                skipped_count += 1
+                continue
             
             replace_paragraph_text(target_para, new_text)
             changes_count += 1
