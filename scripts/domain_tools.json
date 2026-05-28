@@ -1,0 +1,47 @@
+{
+  "domains": {
+    "Retail": [
+      {"name": "Manhattan OMS", "purpose": "order_management_and_logistics_operations"},
+      {"name": "Blue Yonder", "purpose": "supply_chain_and_warehouse_management"},
+      {"name": "JDA", "purpose": "supply_chain_and_warehouse_management"},
+      {"name": "Oracle Retail", "purpose": "retail_erp_and_operations"},
+      {"name": "Salesforce Commerce", "purpose": "ecommerce_and_retail_management"}
+    ],
+    "Healthcare": [
+      {"name": "Epic", "purpose": "order_management_and_logistics_operations"},
+      {"name": "Cerner", "purpose": "order_management_and_logistics_operations"},
+      {"name": "Meditech", "purpose": "clinical_info_and_order_management"},
+      {"name": "Workday Health", "purpose": "healthcare_operations_and_erp"},
+      {"name": "HealthStream", "purpose": "healthcare_compliance_and_learning_systems"}
+    ],
+    "Finance": [
+      {"name": "SAP FICO", "purpose": "financial_management_and_accounting"},
+      {"name": "Oracle Financials", "purpose": "financial_management_and_accounting"},
+      {"name": "Hyperion", "purpose": "financial_planning_and_performance"},
+      {"name": "Anaplan", "purpose": "financial_planning_and_performance"},
+      {"name": "BlackLine", "purpose": "financial_close_and_reconciliation"}
+    ],
+    "Logistics": [
+      {"name": "SAP TM", "purpose": "transportation_and_logistics_management"},
+      {"name": "Oracle TMS", "purpose": "transportation_and_logistics_management"},
+      {"name": "MercuryGate", "purpose": "transportation_and_logistics_management"},
+      {"name": "Flexport", "purpose": "modern_freight_forwarding_and_logistics"}
+    ],
+    "HRIS": [
+      {"name": "Workday HCM", "purpose": "hcm_and_talent_management"},
+      {"name": "SAP SuccessFactors", "purpose": "hcm_and_talent_management"},
+      {"name": "ADP", "purpose": "payroll_and_workforce_management"},
+      {"name": "UKG", "purpose": "payroll_and_workforce_management"},
+      {"name": "Ceridian Dayforce", "purpose": "payroll_and_workforce_management"},
+      {"name": "BambooHR", "purpose": "hcm_and_talent_management"}
+    ],
+    "Data Engineering": [
+      {"name": "Snowflake", "purpose": "data_warehousing_and_analytics"},
+      {"name": "dbt", "purpose": "data_warehousing_and_analytics"},
+      {"name": "Databricks", "purpose": "distributed_data_processing"},
+      {"name": "Apache Spark", "purpose": "distributed_data_processing"},
+      {"name": "Airflow", "purpose": "data_pipeline_orchestration"},
+      {"name": "Azure Data Factory", "purpose": "data_pipeline_orchestration"}
+    ]
+  }
+}
