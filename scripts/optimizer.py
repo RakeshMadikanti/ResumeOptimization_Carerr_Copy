@@ -8,50 +8,49 @@ from docx import Document
 def prune_job_description(raw_jd: str) -> str:
     """
     Remove boilerplate sections (benefits, EEO, company descriptions)
-    from the Job Description to save input tokens.
+    from the Job Description to save input tokens, with safety guards
+    to prevent false-positive truncations.
     """
     lines = raw_jd.split("\n")
     
-    # Section headers indicating start of boilerplate to be truncated
-    boilerplate_sections = [
-        r"\bwhat we offer\b",
-        r"\bbenefits\b",
-        r"\bperks\b",
-        r"\bcompensation\b",
-        r"\bequal opportunity\b",
-        r"\bdiversity & inclusion\b",
-        r"\bdiversity, equity\b",
-        r"\babout us\b",
-        r"\babout the company\b",
-        r"\bcompany overview\b",
-        r"\bculture\b",
-        r"\bphysical requirements\b",
-        r"\bwork environment\b",
-        r"\bhow to apply\b"
+    # Clean headers that indicate the start of boilerplate to be truncated
+    boilerplate_headers = [
+        "what we offer", "benefits", "perks", "compensation", 
+        "equal opportunity", "diversity", "about us", "about the company", 
+        "company overview", "our culture", "company culture", 
+        "physical requirements", "work environment", "how to apply"
     ]
     
     # Specific keywords indicating boilerplate lines to filter out
     boilerplate_keywords = [
-        r"\b401\(k\)\b",
-        r"\bhealth insurance\b",
-        r"\bdental\b",
-        r"\bvision\b",
-        r"\bpaid time off\b",
+        r"401\(k\)",
+        r"health insurance",
+        r"dental insurance",
+        r"vision insurance",
+        r"medical insurance",
+        r"dental\s*(and|&)?\s*vision",
+        r"paid time off",
         r"\bpto\b",
-        r"\bsalary range\b",
-        r"\bcompetitive salary\b",
-        r"\bequal opportunity employer\b",
-        r"\bvisa sponsorship\b",
-        r"\bhybrid work\b",
-        r"\bmedical, dental\b"
+        r"salary range",
+        r"competitive salary",
+        r"equal opportunity employer",
+        r"visa sponsorship",
+        r"hybrid work",
+        r"medical\s*(and|&)?\s*dental"
     ]
     
     cleaned_lines = []
     for line in lines:
         lower_line = line.lower().strip()
-        if any(re.search(pattern, lower_line) for pattern in boilerplate_sections):
-            print(f"# JD Pruner: Truncated JD at boilerplate section: '{line.strip()}'", file=sys.stderr)
-            break
+        stripped_line = line.strip()
+        
+        # Only truncate on short lines (headers) that are NOT list bullets
+        if len(stripped_line) < 50 and stripped_line:
+            if not any(stripped_line.startswith(b) for b in ['*', '-', '•', '+', 'o', '–']):
+                clean_match = re.sub(r'[^a-z0-9\s]+', ' ', lower_line).strip()
+                if any(clean_match.startswith(header) for header in boilerplate_headers):
+                    print(f"# JD Pruner: Truncated JD at boilerplate section: '{line.strip()}'", file=sys.stderr)
+                    break
         cleaned_lines.append(line)
         
     filtered_lines = []
