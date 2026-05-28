@@ -5,6 +5,70 @@ import re
 from openai import OpenAI
 from docx import Document
 
+def prune_job_description(raw_jd: str) -> str:
+    """
+    Remove boilerplate sections (benefits, EEO, company descriptions)
+    from the Job Description to save input tokens.
+    """
+    lines = raw_jd.split("\n")
+    
+    # Section headers indicating start of boilerplate to be truncated
+    boilerplate_sections = [
+        r"\bwhat we offer\b",
+        r"\bbenefits\b",
+        r"\bperks\b",
+        r"\bcompensation\b",
+        r"\bequal opportunity\b",
+        r"\bdiversity & inclusion\b",
+        r"\bdiversity, equity\b",
+        r"\babout us\b",
+        r"\babout the company\b",
+        r"\bcompany overview\b",
+        r"\bculture\b",
+        r"\bphysical requirements\b",
+        r"\bwork environment\b",
+        r"\bhow to apply\b"
+    ]
+    
+    # Specific keywords indicating boilerplate lines to filter out
+    boilerplate_keywords = [
+        r"\b401\(k\)\b",
+        r"\bhealth insurance\b",
+        r"\bdental\b",
+        r"\bvision\b",
+        r"\bpaid time off\b",
+        r"\bpto\b",
+        r"\bsalary range\b",
+        r"\bcompetitive salary\b",
+        r"\bequal opportunity employer\b",
+        r"\bvisa sponsorship\b",
+        r"\bhybrid work\b",
+        r"\bmedical, dental\b"
+    ]
+    
+    cleaned_lines = []
+    for line in lines:
+        lower_line = line.lower().strip()
+        if any(re.search(pattern, lower_line) for pattern in boilerplate_sections):
+            print(f"# JD Pruner: Truncated JD at boilerplate section: '{line.strip()}'", file=sys.stderr)
+            break
+        cleaned_lines.append(line)
+        
+    filtered_lines = []
+    pruned_count = 0
+    for line in cleaned_lines:
+        lower_line = line.lower().strip()
+        if any(re.search(pattern, lower_line) for pattern in boilerplate_keywords):
+            pruned_count += 1
+            continue
+        filtered_lines.append(line)
+        
+    if pruned_count > 0:
+        print(f"# JD Pruner: Filtered out {pruned_count} boilerplate lines", file=sys.stderr)
+        
+    return "\n".join(filtered_lines).strip()
+
+
 class OpenAIProvider:
     def generate(self, system_prompt, user_prompt, model_name):
         # API key is read from OPENAI_API_KEY environment variable
@@ -147,12 +211,47 @@ def optimize_pro(input_path, output_path, jd_text, prompt_instruction, model_nam
             if text:
                 indexed_paragraphs.append(para)
         
+        # Section classification logic (to exclude header and education sections from LLM prompt)
+        SECTION_KEYWORDS = {
+            "summary": ["summary", "profile", "objective", "professional summary", "career objective"],
+            "skills": ["skills", "technical skills", "expertise", "competencies", "technologies", "tools"],
+            "experience": ["experience", "employment history", "work history", "professional experience", "work experience"],
+            "education": ["education", "academic", "credentials", "degrees", "university", "schooling"]
+        }
+
+        def classify_heading(text_val):
+            lower = text_val.lower().strip()
+            if len(lower) > 40:
+                return None
+            for section_key, keywords in SECTION_KEYWORDS.items():
+                for kw in keywords:
+                    if kw in lower:
+                        return section_key
+            return None
+
+        current_section = "header"
+        para_sections = []
+        for para in indexed_paragraphs:
+            text = para.text.strip()
+            detected = classify_heading(text)
+            if detected is not None:
+                current_section = detected
+            para_sections.append(current_section)
+        
         # Build numbered resume content for ChatGPT using markdown for bolding
         numbered_lines = []
+        excluded_count = 0
         for i, para in enumerate(indexed_paragraphs):
+            section = para_sections[i]
+            # Exclude header and education paragraphs from LLM to save tokens & preserve styling
+            if section in ["header", "education"]:
+                excluded_count += 1
+                continue
+            
             para_md = get_para_markdown(para)
             numbered_lines.append(f"[{i + 1}] {para_md}")
         
+        print(f"# Sectional Diff: Excluded {excluded_count} static paragraphs (header/education) from LLM prompt", file=sys.stderr)
         numbered_resume = "\n".join(numbered_lines)
         
         # System prompt: user's prompt + output format
@@ -387,6 +486,8 @@ if __name__ == "__main__":
             jd_t = f.read()
     else:
         jd_t = jd_arg
+    
+    jd_t = prune_job_description(jd_t)
 
     # Resolve Prompt
     if os.path.exists(prompt_arg):
