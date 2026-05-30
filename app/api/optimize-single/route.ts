@@ -33,20 +33,11 @@ export async function POST(req: NextRequest) {
         const jd = formData.get("jd") as string;
         const name = formData.get("name") as string;
         const prompt = formData.get("prompt") as string;
-
-        const model = formData.get("model") as string;
-        const mode = formData.get("mode") as string || "basic";
         const template = formData.get("template") as string || "standard";
 
-        // Validate model against allowlist
-        if (!model || !ALLOWED_MODELS.has(model)) {
-            return NextResponse.json({ error: "Invalid model selected" }, { status: 400 });
-        }
-
-        // Validate mode
-        if (!['basic', 'pro'].includes(mode)) {
-            return NextResponse.json({ error: "Invalid mode" }, { status: 400 });
-        }
+        // Hardcode model and mode as required
+        const model = "gpt-5.2";
+        const mode = "pro";
 
         // Validate template
         if (!ALLOWED_TEMPLATES.has(template)) {
@@ -88,8 +79,7 @@ export async function POST(req: NextRequest) {
             const scriptPath = join(process.cwd(), "scripts", "optimizer.py");
             const pythonCmd = getPythonCommand();
 
-            // Pass API key via environment variable instead of CLI argument for security
-            console.log(`[AutoResume] Mode: ${mode.toUpperCase()}, Model: ${model}`);
+            console.log(`[AutoResume] Running Auto-Injection optimization with model: ${model}`);
             const command = `${pythonCmd} "${scriptPath}" "${inputPath}" "${outputPath}" "${jdPath}" "${promptPath}" "openai" "${model}" "${mode}"`;
 
             const { stdout, stderr } = await execAsync(command, {
@@ -114,7 +104,7 @@ export async function POST(req: NextRequest) {
                     console.log(`[AutoResume] Rearranging sections with template: ${template}`);
                     const rearrangeCmd = `${pythonCmd} "${rearrangeScript}" "${outputPath}" "${rearrangedPath}" "${template}"`;
                     const rearrangeResult = await execAsync(rearrangeCmd, {
-                        timeout: 15000, // 15 second timeout (no AI, pure doc manipulation)
+                        timeout: 15000, // 15 second timeout
                     });
 
                     if (rearrangeResult.stderr) {
@@ -138,10 +128,15 @@ export async function POST(req: NextRequest) {
                     try { await unlink(tempFile); } catch { }
                 }
 
+                // Base64 encode the intelligence report to make it safe for HTTP header transmission
+                const base64Report = Buffer.from(result.report || "").toString('base64');
+
                 return new NextResponse(new Uint8Array(fileBuffer), {
                     headers: {
                         'Content-Type': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
                         'Content-Disposition': `attachment; filename="${fileName}.docx"`,
+                        'X-Intelligence-Report': base64Report,
+                        'Access-Control-Expose-Headers': 'X-Intelligence-Report'
                     },
                 });
             } else {
