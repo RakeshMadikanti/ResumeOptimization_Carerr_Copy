@@ -41,7 +41,7 @@ Run the optimizer locally using the test resume and job description to inspect t
 
 Run the optimization command in your terminal:
 ```powershell
-python scripts/optimizer.py --resume "components/Testing/Prashanth M - Workday-Base Resume.docx" --jd "components/Testing/jd.txt" --output "components/Testing/optimized_resume.docx"
+python scripts/optimizer.py "components/Testing/Prashanth M - Workday-Base Resume.docx" "components/Testing/optimized_resume.docx" "components/Testing/jd.txt" "highlight experience relevant to the job requirements." "openai" "gpt-5.2" "pro"
 ```
 
 ### B. Expected Scores
