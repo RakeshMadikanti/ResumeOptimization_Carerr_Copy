@@ -16,8 +16,16 @@
 # Misc
 .DS_Store
 *.pem
-*.docx
+# Ignore generated outputs and reports
+/testing/outputs/
+/testing/reports/
+/testing/job_descriptions/
+/testing/Clouvr Enrolled Base Resumes/
+
 *.log
+/build_log.txt
+__pycache__/
+*.pyc
 
 # Debug
 npm-debug.log*

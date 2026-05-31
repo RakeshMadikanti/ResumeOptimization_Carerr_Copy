@@ -190,8 +190,15 @@ Your job is to analyze the target Job Description (JD), the numbered Resume, and
 You must output a raw JSON object in the following format:
 {
     "detected_seniority": "Junior | Mid-Level | Senior | Executive",
-    "candidate_domain": "One of: Retail, Healthcare, Finance, Logistics, HRIS, Data Engineering, or Other",
-    "jd_domain": "One of: Retail, Healthcare, Finance, Logistics, HRIS, Data Engineering, or Other",
+    "candidate_domain": "Primary professional domain identified from the candidate resume (e.g., SAP, Workday, Business Analysis, Cloud Engineering, Software Engineering, etc.)",
+    "candidate_current_specialization": "Current specialization identified from the candidate resume (e.g., SAP MM, Payroll, QA Analyst, Java Full Stack)",
+    "target_domain": "Target professional domain identified from the Job Description (e.g., SAP, Workday, Business Analysis, DevOps, Network Security, etc.)",
+    "target_specialization": "Target specialization identified from the Job Description (e.g., SAP FICO, Integrations, QA Automation Engineer, Backend Engineering)",
+    "core_target_capabilities": ["list of capabilities that directly support the target role and must dominate the resume sections"],
+    "supporting_capabilities": ["capabilities that strengthen the target role but are secondary"],
+    "background_capabilities": ["capabilities belonging to the previous specialization that must be kept but demoted in emphasis"],
+    "skills_reconstruction_plan": "Specific guidelines to reorder the Skills section: core target-role skills first, supporting skills second, and background skills last.",
+    "experience_identity_plan": "Specific instructions for rewriting experience bullets so that target-role responsibilities become the primary focus and background tasks are demoted in emphasis.",
     "client_1_index": 1-based paragraph index of Client 1 (earlier role) title line,
     "client_1_original_title": "the exact text of Client 1 title paragraph",
     "client_1_proposed_title": "Proposed Client 1 Title Line", // MUST preserve original company and dates exactly, evolving only the job title part to a foundational/transitional title
@@ -332,10 +339,19 @@ def optimize_pro(input_path, output_path, jd_text, prompt_instruction, model_nam
         plan = run_stage1_planner(jd_text, numbered_resume, gap_report, model_name)
         
         candidate_domain = plan.get("candidate_domain", heuristic_domain)
-        jd_domain = plan.get("jd_domain", "Other")
+        candidate_current_specialization = plan.get("candidate_current_specialization", "Not Specified")
+        target_domain = plan.get("target_domain", plan.get("jd_domain", "Other"))
+        target_specialization = plan.get("target_specialization", "Not Specified")
         seniority = plan.get("detected_seniority", "Mid-Level")
+        jd_domain = target_domain
         
-        print(f"# Stage 1 Planner Output: Seniority={seniority}, Candidate Domain={candidate_domain}", file=sys.stderr)
+        core_target_capabilities = plan.get("core_target_capabilities", [])
+        supporting_capabilities = plan.get("supporting_capabilities", [])
+        background_capabilities = plan.get("background_capabilities", [])
+        skills_reconstruction_plan = plan.get("skills_reconstruction_plan", "Reorder skills targeting target specialization first, supporting second, background last.")
+        experience_identity_plan = plan.get("experience_identity_plan", "Transform bullets prioritizing target capabilities and demoting background capabilities.")
+        
+        print(f"# Stage 1 Planner Output: Seniority={seniority}, Candidate Domain={candidate_domain}, Target Domain={target_domain}", file=sys.stderr)
         
         # Update gap report if candidate domain is corrected
         if candidate_domain != heuristic_domain:
@@ -423,6 +439,28 @@ def optimize_pro(input_path, output_path, jd_text, prompt_instruction, model_nam
         allowed_verbs = ", ".join(calibration["allowed_verbs"])
         forbidden_phrases = ", ".join(calibration["forbidden_phrases"])
         
+        domain_transition_strategy = (
+            f"Candidate Primary Domain: {candidate_domain}\n"
+            f"Candidate Current Specialization: {candidate_current_specialization}\n"
+            f"Target Domain: {target_domain}\n"
+            f"Target Specialization: {target_specialization}\n"
+            "\n"
+            f"CORE TARGET CAPABILITIES (Promote & Emphasize):\n"
+            f"{', '.join(core_target_capabilities) if core_target_capabilities else 'Directly align with target role'}\n"
+            "\n"
+            f"SUPPORTING CAPABILITIES (Keep Visible but Secondary):\n"
+            f"{', '.join(supporting_capabilities) if supporting_capabilities else 'Strengthen the target role'}\n"
+            "\n"
+            f"BACKGROUND CAPABILITIES (Reduce Emphasis but Do NOT Remove):\n"
+            f"{', '.join(background_capabilities) if background_capabilities else 'Demote previous role capabilities'}\n"
+            "\n"
+            f"SKILLS SECTION RECONSTRUCTION PLAN:\n"
+            f"{skills_reconstruction_plan}\n"
+            "\n"
+            f"EXPERIENCE ROLE IDENTITY TRANSFORMATION PLAN:\n"
+            f"{experience_identity_plan}"
+        )
+        
         # ─── MULTI-PASS OPTIMIZER LOOP ────────────────────────────────────
         max_passes = 3
         current_pass = 1
@@ -444,6 +482,23 @@ def optimize_pro(input_path, output_path, jd_text, prompt_instruction, model_nam
             if current_pass == 1:
                 system_prompt = f"""You are a senior resume rewriter. Your job is to optimize the resume paragraphs to align with the target JD while remaining 100% defensible, professional, and natural.
                 
+**DOMAIN RECOGNITION & SPECIALIZATION TRANSITION**:
+{domain_transition_strategy}
+
+CRITICAL ROLE TRANSFORMATION RULE:
+Do NOT transform blindly using JD keywords. You must transform the resume through this domain transition ecosystem. Reconstruct the Professional Summary, Skills, and Experience sections to show a natural career progression from the candidate's current specialization to the target specialization. Ensure all transformed responsibilities are realistic, explainable, and logically defensible within this transition.
+
+**SUMMARY POSITIONING RULE (CRITICAL)**:
+- The Professional Summary must represent the strongest defensible version of the target specialization.
+- Avoid weak positioning language: "Exposure to", "Supported", "Assisted with", "Worked alongside" (unless no stronger evidence exists). Position the candidate as an active contributor operating within the target specialization.
+
+**SKILLS PRIORITIZATION RULE (CRITICAL)**:
+- Reorder the Skills section. Core target-role skills must appear first, supporting skills second, and background skills last.
+
+**FINAL IDENTITY CHECK**:
+- Before outputting, ask yourself: "If a recruiter reads only the Summary, Skills, and the first 5 bullets of the most recent role, what professional identity would they assign to this candidate?"
+- If the answer is not the target specialization, continue refining the content until the target identity is clearly and dominantly established.
+
 **KEYWORD AUTO-INJECTION AND CONFIDENCE RULES**:
 {injection_instructions}
 
@@ -495,6 +550,23 @@ def optimize_pro(input_path, output_path, jd_text, prompt_instruction, model_nam
                 
                 system_prompt = f"""You are a senior resume optimizer. This is optimization pass {current_pass} to raise the alignment scores to 92+.
                 
+**DOMAIN RECOGNITION & SPECIALIZATION TRANSITION**:
+{domain_transition_strategy}
+
+CRITICAL ROLE TRANSFORMATION RULE:
+Do NOT transform blindly using JD keywords. You must transform the resume through this domain transition ecosystem. Reconstruct the Professional Summary, Skills, and Experience sections to show a natural career progression from the candidate's current specialization to the target specialization. Ensure all transformed responsibilities are realistic, explainable, and logically defensible within this transition.
+
+**SUMMARY POSITIONING RULE (CRITICAL)**:
+- The Professional Summary must represent the strongest defensible version of the target specialization.
+- Avoid weak positioning language: "Exposure to", "Supported", "Assisted with", "Worked alongside" (unless no stronger evidence exists). Position the candidate as an active contributor operating within the target specialization.
+
+**SKILLS PRIORITIZATION RULE (CRITICAL)**:
+- Reorder the Skills section. Core target-role skills must appear first, supporting skills second, and background skills last.
+
+**FINAL IDENTITY CHECK**:
+- Before outputting, ask yourself: "If a recruiter reads only the Summary, Skills, and the first 5 bullets of the most recent role, what professional identity would they assign to this candidate?"
+- If the answer is not the target specialization, continue refining the content until the target identity is clearly and dominantly established.
+
 **CURRENT METRICS**:
 - ATS Score: {current_scores["score"]} / 100
 - Keyword Match Score: {current_scores["keyword_match"]} / 100

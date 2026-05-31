@@ -148,7 +148,7 @@ def get_tool_mappings(candidate_domain: str, jd_domain: str) -> dict:
 # --- UNIVERSAL CATEGORIES & KEYWORD GAP ANALYSIS ---
 
 UNIVERSAL_CATEGORIES = {
-    "ERP_HRIS": ["workday", "sap", "oracle hcm", "peoplesoft", "hcm", "successfactors", "adp", "kronos", "ukg", "payroll"],
+    "ERP_HRIS": ["workday", "sap", "oracle hcm", "peoplesoft", "hcm", "successfactors", "adp", "kronos", "ukg", "payroll", "sap fico", "general ledger", "accounts payable", "accounts receivable", "gl", "ap", "ar", "eib", "workday studio", "cloud connect", "core connector", "xslt", "xpath", "birt", "calculated fields", "report writer"],
     "BI_ANALYTICS": ["power bi", "powerbi", "tableau", "looker", "qlik", "ssrs", "excel", "microstrategy", "cognos", "dax", "sql", "reporting"],
     "DATA_SCIENCE_ML": ["python", "r", "pandas", "numpy", "scikit-learn", "tensorflow", "pytorch", "keras", "machine learning", "nlp", "jupyter", "spark", "hadoop", "rstudio"],
     "BUSINESS_ANALYSIS": ["business analysis", "requirements gathering", "brd", "frd", "user stories", "gap analysis", "agile", "scrum", "jira", "confluence", "sdt", "uat"],
@@ -156,8 +156,8 @@ UNIVERSAL_CATEGORIES = {
     "QA_TESTING": ["selenium", "cypress", "playwright", "test cases", "test plans", "qa", "manual testing", "regression testing", "automation", "postman", "soapui", "junit", "testng", "sdet", "cucumber"],
     "CYBER_SECURITY": ["cybersecurity", "siem", "firewall", "splunk", "splank", "soc", "penetration testing", "vulnerability", "iam", "active directory", "okta", "oauth", "saml", "cissp", "ceh"],
     "NETWORK_ENG": ["cisco", "ccna", "ccnp", "routing", "switching", "vpn", "dns", "dhcp", "tcp/ip", "subnetting", "wan", "lan", "load balancer", "firewall"],
-    "FULL_STACK": ["javascript", "typescript", "react", "angular", "vue", "node.js", "nodejs", "express", "html", "css", "web development", "bootstrap", "tailwind"],
-    "JAVA_STACK": ["java", "spring boot", "springboot", "hibernate", "maven", "gradle", "jpa", "microservices", "tomcat"],
+    "FULL_STACK": ["javascript", "typescript", "react", "angular", "vue", "node.js", "nodejs", "express", "html", "css", "web development", "bootstrap", "tailwind", "sql"],
+    "JAVA_STACK": ["java", "spring boot", "springboot", "hibernate", "maven", "gradle", "jpa", "microservices", "tomcat", "sql"],
     "IT_RELEASE_CHANGE": ["release management", "change management", "itil", "servicenow", "cicd", "jenkins", "git", "gitlab", "github", "devops", "kubernetes", "docker"]
 }
 
@@ -177,8 +177,17 @@ SYNONYMS = {
     "integration lifecycle": ["integration lifecycle", "sdlc", "deployment phase"],
     "workday extend": ["extend", "wql", "workday extend developer"],
     "power bi": ["powerbi", "power bi developer", "dax"],
-    "scrum master": ["scrum facilitator", "agile coach", "scrummaster"]
+    "scrum master": ["scrum facilitator", "agile coach", "scrummaster"],
+    "general ledger": ["general ledger", "gl", "fi-gl", "general ledger reconciliation"],
+    "accounts payable": ["accounts payable", "ap", "fi-ap", "accounts payable integration"],
+    "accounts receivable": ["accounts receivable", "ar", "fi-ar", "accounts receivable integration"],
+    "core connector": ["core connector", "core connectors", "ccw"],
+    "full stack": ["full stack", "fullstack", "full-stack", "full stack development"],
+    "change management": ["change management", "change enablement", "change control"],
+    "release management": ["release management", "release deployment", "release control"],
+    "sql": ["sql", "mysql", "postgresql", "oracle", "sql server", "database", "relational database"]
 }
+
 
 CERTIFICATION_EQUIVALENTS = {
     "workday integration core": {
@@ -278,12 +287,12 @@ def extract_jd_keywords(jd_text: str) -> dict:
     # Add other common terms
     base_search.extend([
         "workday studio", "eib", "xslt", "xpath", "birt", "cloud connect",
-        "calculated fields", "report writer", "hcm", "studio", "integration core",
+        "calculated fields", "report writer", "hcm", "integration core",
         "power bi", "tableau", "jira", "scrum", "agile", "sql", "aws", "azure", "gcp",
         "selenium", "cypress", "playwright", "sdet", "qa", "manual testing", "test cases",
         "spring boot", "microservices", "kubernetes", "docker", "jenkins", "git",
         "cissp", "siem", "firewall", "cybersecurity", "networking", "cisco",
-        "business analyst", "requirements", "uat", "brd", "frd", "change management",
+        "business analyst", "uat", "brd", "frd", "change management",
         "release management", "servicenow", "itil", "project management", "pmp", "csm"
     ])
     base_search = list(set([k.lower() for k in base_search]))
@@ -297,13 +306,47 @@ def extract_jd_keywords(jd_text: str) -> dict:
     clean_jd = re.sub(r'^[A-Z][a-z]+', '', jd_text) # strip paragraph openers
     clean_jd = re.sub(r'\.\s+[A-Z][a-z]+', '. ', clean_jd) # strip sentence starters
     cap_words = re.findall(r'\b([A-Z][a-zA-Z0-9+#.-]+)\b', clean_jd)
-    common_stops = {"the", "a", "an", "we", "our", "you", "your", "they", "this", "that", "these", "those", "and", "but", "or", "for", "with", "about", "to", "in", "on", "at", "by", "from", "as", "if", "when", "how", "why", "who", "what", "which", "he", "she", "it", "i", "me", "my", "us", "we", "they", "them", "their", "are", "is", "was", "were", "be", "been", "being", "have", "has", "had", "do", "does", "did", "will", "would", "shall", "should", "can", "could", "may", "might", "must", "target", "role", "position", "company", "candidate", "responsibilities", "requirements", "skills", "experience", "education", "degree", "team", "work", "job", "description", "details"}
+    common_stops = {
+        "the", "a", "an", "we", "our", "you", "your", "they", "this", "that", "these", "those", 
+        "and", "but", "or", "for", "with", "about", "to", "in", "on", "at", "by", "from", "as", 
+        "if", "when", "how", "why", "who", "what", "which", "he", "she", "it", "i", "me", "my", 
+        "us", "we", "they", "them", "their", "are", "is", "was", "were", "be", "been", "being", 
+        "have", "has", "had", "do", "does", "did", "will", "would", "shall", "should", "can", 
+        "could", "may", "might", "must", "target", "role", "position", "company", "candidate", 
+        "responsibilities", "requirements", "skills", "experience", "education", "degree", 
+        "team", "work", "job", "description", "details", "manager", "developer", "engineer", 
+        "consultant", "analyst", "specialist", "architect", "lead", "senior", "junior", 
+        "strong", "excellent", "professional", "highly", "successful", "proven", "caterpillar", 
+        "disney", "merck", "priceline", "walmart", "collaborate", "partner", "deliver", "support", 
+        "assist", "exposure", "worked", "alongside"
+    }
     for word in cap_words:
         w_lower = word.lower()
         if w_lower not in common_stops and len(word) > 2:
             found_keywords.append(w_lower)
             
+    # 2.5 Prune individual words when their compound phrase is present
+    compounds = [
+        ("change management", ["change", "management"]),
+        ("release management", ["release", "management"]),
+        ("cloud connect", ["cloud", "connect"]),
+        ("core connector", ["core", "connector"]),
+        ("full stack", ["full", "stack"]),
+        ("general ledger", ["general", "ledger"]),
+        ("accounts payable", ["accounts", "payable", "receivable"]),
+        ("accounts receivable", ["accounts", "payable", "receivable"]),
+        ("sap fico", ["sap", "fico"])
+    ]
+    
+    words_to_remove = set()
+    for compound, constituents in compounds:
+        if compound in found_keywords:
+            for word in constituents:
+                words_to_remove.add(word)
+                
+    found_keywords = [kw for kw in found_keywords if kw not in words_to_remove]
     found_keywords = list(set(found_keywords))
+
     
     # 3. Contextual classification (Hard Required vs Preferred vs Soft Required)
     for kw in found_keywords:
